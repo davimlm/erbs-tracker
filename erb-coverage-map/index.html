@@ -32,9 +32,10 @@
                 <button class="segment-btn" data-mode="estados">Estados</button>
                 <button class="segment-btn" data-mode="regioes">Regiões</button>
             </div>
-            <select id="city-select">
+            <input type="text" id="search-input" list="city-datalist" placeholder="Digite para pesquisar..." class="search-input" style="width: 100%; padding: 10px 14px; margin-bottom: 8px; border-radius: 8px; background-color: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-glass); color: var(--text-primary); font-size: 0.9rem; outline: none;">
+            <datalist id="city-datalist">
                 <!-- Opções populadas dinamicamente via Javascript -->
-            </select>
+            </datalist>
         </div>
 
         <div class="control-group">
@@ -61,44 +62,61 @@
                 <div class="input-container">
                     <input id="freq-2600" type="radio" name="frequency" value="2600">
                     <div class="radio-tile">
-                        <span class="radio-label">4G High</span>
-                        <span class="radio-desc">2.6 GHz</span>
+                        <span class="radio-label">4G / 5G Capacity</span>
+                        <span class="radio-desc">2600 MHz</span>
                     </div>
                 </div>
                 <div class="input-container">
                     <input id="freq-3500" type="radio" name="frequency" value="3500">
                     <div class="radio-tile">
                         <span class="radio-label">5G Standalone</span>
-                        <span class="radio-desc">3.5 GHz</span>
+                        <span class="radio-desc">3500 MHz</span>
                     </div>
                 </div>
             </div>
         </div>
 
+        <div class="control-group toggle-group" style="margin-top: 10px;">
+            <label for="pop-toggle" class="toggle-label">
+                Distribuição Populacional (Simulada)
+                <div class="toggle-switch">
+                    <input type="checkbox" id="pop-toggle">
+                    <span class="slider round"></span>
+                </div>
+            </label>
+        </div>
+        
+        <button id="btn-metodologia" class="btn-primary" style="margin-top: 15px; margin-bottom: 5px;">Como o cálculo é feito?</button>
+
         <div class="stats-panel">
-            <h2>Métricas da Região</h2>
             <div class="stat-row">
-                <span>ERBs Ativas na Análise:</span>
-                <span id="stat-erb-count" class="stat-value">0</span>
+                <span>Total de ERBs:</span>
+                <span id="stat-erbs" class="stat-value highlight-number">0</span>
             </div>
             <div class="stat-row">
-                <span>Área Total de Estudo:</span>
+                <span>Raio Estimado (M):</span>
+                <span id="stat-radius" class="stat-value">0 km</span>
+            </div>
+            <div class="stat-row">
+                <span>Habitantes / ERB:</span>
+                <span id="stat-hab-erb" class="stat-value warning-text">0</span>
+            </div>
+            <hr style="border: 0; height: 1px; background: rgba(255,255,255,0.1); margin: 12px 0;">
+            <div class="stat-row">
+                <span>Área de Análise:</span>
                 <span id="stat-total-area" class="stat-value">0 km²</span>
-            </div>
-            <div class="stat-row">
-                <span>População:</span>
-                <span id="stat-population" class="stat-value">0</span>
-            </div>
-            <div class="stat-row">
-                <span>Habitantes por ERB:</span>
-                <span id="stat-hab-erb" class="stat-value">0</span>
             </div>
             <div class="stat-row">
                 <span>Zona de Sombra (Vazio):</span>
                 <span id="stat-shadow-percent" class="stat-value shadow-alert">0%</span>
             </div>
-            <div class="progress-bar-container">
-                <div id="shadow-progress" class="progress-bar"></div>
+            <div class="stat-row">
+                <span>População Impactada:</span>
+                <span id="stat-impacted-pop" class="stat-value shadow-alert">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Market Share (Teleco):</span>
+                <span id="veracity-teleco" class="stat-value">Validado</span>
             </div>
         </div>
 
@@ -109,10 +127,6 @@
                 <span class="stat-value" style="color: #0a84ff;">Base Atualizada</span>
             </div>
             <div class="stat-row">
-                <span>Market Share (Teleco):</span>
-                <span id="veracity-teleco" class="stat-value">Validado</span>
-            </div>
-            <div class="stat-row">
                 <span>Status da Rede (Downdetector):</span>
                 <span id="veracity-downdetector" class="stat-value success-text">Estável</span>
             </div>
@@ -120,10 +134,27 @@
         </div>
     </div>
 
+    <div id="modal-metodologia" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Metodologia de Cálculo de Gargalos</h2>
+                <button id="btn-close-modal" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>O algoritmo executa uma análise espacial em três etapas para determinar as zonas de sombra e o impacto populacional:</p>
+                <ol>
+                    <li><strong>Área de Cobertura (Buffer):</strong> Para cada Estação Rádio Base (ERB) licenciada, aplicamos um raio teórico (buffer) baseado na frequência de operação ($1200$m para $700$MHz, $600$m para $2600$MHz, etc.). Todas as áreas são unidas computacionalmente.</li>
+                    <li><strong>Cálculo do Vazio Espacial:</strong> Subtraímos a área total coberta pelo polígono da região estudada. O que sobra é classificado como "Zona de Sombra" (renderizado em vermelho).</li>
+                    <li><strong>Impacto Populacional (Simulação):</strong> Usamos uma distribuição estatística de pontos dentro da malha delimitada pelo IBGE. O algoritmo cruza cada ponto populacional com a geometria da Zona de Sombra. Pontos que caem no "vazio" ficam vermelhos e representam a população desconectada.</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     
-    <script charset="utf-8" src="data/config.js"></script>
-    <script src="app.js?v=2"></script>
+    <script charset="utf-8" src="data/config.js?v=7"></script>
+    <script src="app.js?v=7"></script>
 </body>
 </html>

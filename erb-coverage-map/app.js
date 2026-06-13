@@ -9,6 +9,7 @@ const CONFIG_PROPAGACAO = {
 let mapa;
 let camadaEstudoGroup;
 let camadaDadosGroup;
+let camadaPopulacaoGroup; // Nova camada para os pontos simulados
 let basePointsERB = []; // Armazena a infraestrutura fixa para evitar mutações de posição
 // CONFIG_CIDADES_GERADO já vêm carregados via tag <script> no HTML (config.js)
 let erbsDataCache = {}; // Cache de macrorregiões
@@ -37,8 +38,9 @@ function configurarAbasModoVisualizacao() {
 }
 
 async function popularDropdownLocation() {
-    const citySelect = document.getElementById('city-select');
-    citySelect.innerHTML = ''; 
+    const cityDatalist = document.getElementById('city-datalist');
+    const searchInput = document.getElementById('search-input');
+    cityDatalist.innerHTML = ''; 
     
     let configData;
     if (viewMode === 'cidades') configData = CONFIG_CIDADES_GERADO;
@@ -52,9 +54,9 @@ async function popularDropdownLocation() {
     
     for (const [id, config] of locations) {
         const option = document.createElement('option');
-        option.value = id;
-        option.textContent = config.nome;
-        citySelect.appendChild(option);
+        option.value = config.nome;
+        option.dataset.id = id;
+        cityDatalist.appendChild(option);
     }
     
     // Força selecao da capital SP caso exista na lista de cidades
@@ -62,12 +64,14 @@ async function popularDropdownLocation() {
         defaultId = 'sao_paulo_sp';
     }
     
-    citySelect.value = defaultId;
-    await mudarCidade();
+    searchInput.value = configData[defaultId].nome;
+    searchInput.dataset.currentId = defaultId;
+    await mudarCidade(defaultId);
 }
 
 function inicializarMapa() {
     mapa = L.map('map', {
+        center: [-15.7801, -47.9292], // Brasília as default initial center
         zoom: 14,
         zoomControl: false
     });
@@ -85,11 +89,14 @@ function inicializarMapa() {
 
     camadaEstudoGroup = L.layerGroup().addTo(mapa);
     camadaDadosGroup = L.layerGroup().addTo(mapa);
+    camadaPopulacaoGroup = L.layerGroup().addTo(mapa); // Camada sobreposta
 }
 
 // Carrega a base de ERBs para a região selecionada (Cidade, Estado ou Região)
 function gerarMalhaInfraestrutura(locationId, erbsDataLocal) {
     basePointsERB = []; // Limpa a base
+    
+    if (!erbsDataLocal) erbsDataLocal = {};
     
     if (viewMode === 'cidades') {
         if (erbsDataLocal[locationId]) {
@@ -115,6 +122,7 @@ function executarAnaliseEspacial() {
     // Limpar camadas anteriores
     camadaEstudoGroup.clearLayers();
     camadaDadosGroup.clearLayers();
+    camadaPopulacaoGroup.clearLayers();
 
     // 1. Obter parâmetros da UI
     const operadoraSelecionada = document.getElementById('operator-select').value;
@@ -130,7 +138,7 @@ function executarAnaliseEspacial() {
     });
 
     // 3. Definir Polígono da Área de Estudo
-    const locationId = document.getElementById('city-select').value;
+    const locationId = document.getElementById('search-input').dataset.currentId;
     let configLocal;
     if (viewMode === 'cidades') configLocal = CONFIG_CIDADES_GERADO[locationId];
     else if (viewMode === 'estados') configLocal = CONFIG_ESTADOS_GERADO[locationId];
@@ -221,16 +229,21 @@ function executarAnaliseEspacial() {
                 uniaoCobertura = turf.union(uniaoCobertura, buffersCobertura[i]);
             }
             
-            poligonoZonaSombra = turf.difference(poligonoEstudo, uniaoCobertura);
-            
-            if (poligonoZonaSombra) {
-                L.geoJSON(poligonoZonaSombra, {
-                    style: {
-                        color: 'transparent',
-                        fillColor: '#ff3b30',
-                        fillOpacity: 0.35 // Vermelho indicando buraco de sombra
-                    }
-                }).addTo(camadaEstudoGroup);
+            try {
+                poligonoZonaSombra = turf.difference(poligonoEstudo, uniaoCobertura);
+                
+                if (poligonoZonaSombra) {
+                    L.geoJSON(poligonoZonaSombra, {
+                        style: {
+                            color: 'transparent',
+                            fillColor: '#ff3b30',
+                            fillOpacity: 0.35 // Vermelho indicando buraco de sombra
+                        }
+                    }).addTo(camadaEstudoGroup);
+                }
+            } catch (e) {
+                console.error("Erro no turf.difference, pulando sombra: ", e);
+                poligonoZonaSombra = null; // Falhou no cálculo
             }
         } else {
             poligonoZonaSombra = poligonoEstudo;
@@ -241,29 +254,75 @@ function executarAnaliseEspacial() {
         }
     }
 
+    // ==========================================
+    // Simulação Estatística da População
+    // ==========================================
+    const popToggleEl = document.getElementById('pop-toggle');
+    const mostrarPopulacao = popToggleEl ? popToggleEl.checked : false;
+
+    if (mostrarPopulacao && viewMode === 'cidades' && poligonoEstudo) {
+        // Geramos pontos simulados para representar a distribuição populacional (max 1000)
+        const bboxPop = turf.bbox(poligonoEstudo);
+        const pontosSimulados = turf.randomPoint(1000, { bbox: bboxPop });
+        
+        turf.featureEach(pontosSimulados, function (currentFeature) {
+            // Filter points to only those exactly inside the city polygon
+            if (turf.booleanPointInPolygon(currentFeature, poligonoEstudo)) {
+                let estaNaSombra = false;
+                if (poligonoZonaSombra) {
+                    try {
+                        estaNaSombra = turf.booleanPointInPolygon(currentFeature, poligonoZonaSombra);
+                    } catch (e) { }
+                }
+
+                const corPonto = estaNaSombra ? '#ff453a' : '#86868b';
+                const coords = currentFeature.geometry.coordinates;
+
+                L.circleMarker([coords[1], coords[0]], {
+                    radius: 2,
+                    fillColor: corPonto,
+                    color: corPonto,
+                    weight: 0,
+                    fillOpacity: estaNaSombra ? 1 : 0.4
+                }).addTo(camadaPopulacaoGroup);
+            }
+        });
+    }
+
     // 6. Atualização de Métricas
     const areaTotalKm2 = turf.area(poligonoEstudo) / 1000000;
     const areaSombraKm2 = poligonoZonaSombra ? (turf.area(poligonoZonaSombra) / 1000000) : 0;
-    const percentualSombra = viewMode === 'cidades' ? ((areaSombraKm2 / areaTotalKm2) * 100).toFixed(1) : 'N/A';
+    const percentSombraCalculado = ((areaSombraKm2 / areaTotalKm2) * 100);
+    const percentualSombra = viewMode === 'cidades' ? percentSombraCalculado.toFixed(1) : 'N/A';
 
     // População e Habitantes por ERB
     const pop = configLocal.populacao || 0;
-    let habPorErb = '--';
-    if (erbsAtivas.length > 0 && pop > 0) {
-        habPorErb = Math.round(pop / erbsAtivas.length).toLocaleString('pt-BR');
+    const habErb = erbsAtivas.length > 0 ? Math.round(pop / erbsAtivas.length) : pop;
+
+    let popImpactada = 0;
+    if (viewMode === 'cidades' && !isNaN(percentSombraCalculado)) {
+        popImpactada = Math.round(pop * (percentSombraCalculado / 100));
     }
 
-    document.getElementById('stat-erb-count').innerText = erbsAtivas.length.toLocaleString('pt-BR');
-    document.getElementById('stat-total-area').innerText = viewMode === 'cidades' ? `${areaTotalKm2.toFixed(2)} km²` : 'Visão Macro';
-    document.getElementById('stat-population').innerText = pop > 0 ? pop.toLocaleString('pt-BR') : 'N/D';
-    document.getElementById('stat-hab-erb').innerText = habPorErb;
-    document.getElementById('stat-shadow-percent').innerText = viewMode === 'cidades' ? `${percentualSombra}%` : '--';
-    document.getElementById('shadow-progress').style.width = viewMode === 'cidades' ? `${percentualSombra}%` : '0%';
+    document.getElementById('stat-erbs').innerText = erbsAtivas.length.toLocaleString('pt-BR');
+    document.getElementById('stat-radius').innerText = (raioMetros / 1000).toFixed(2) + ' km';
+    document.getElementById('stat-hab-erb').innerText = viewMode === 'cidades' ? habErb.toLocaleString('pt-BR') : '--';
+    
+    document.getElementById('stat-total-area').innerText = viewMode === 'cidades' ? areaTotalKm2.toFixed(1) + ' km²' : '-- km²';
+    document.getElementById('stat-shadow-percent').innerText = percentualSombra !== 'N/A' ? percentualSombra + '%' : '--';
+    
+    const popImpEl = document.getElementById('stat-impacted-pop');
+    if (popImpEl) {
+        popImpEl.innerText = viewMode === 'cidades' ? popImpactada.toLocaleString('pt-BR') : '--';
+    }
+
+    const shadowProgressEl = document.getElementById('shadow-progress');
+    if (shadowProgressEl) {
+        shadowProgressEl.style.width = viewMode === 'cidades' ? `${percentualSombra}%` : '0%';
+    }
 }
 
 function configurarEventosUI() {
-    document.getElementById('city-select').addEventListener('change', mudarCidade);
-    
     document.getElementById('operator-select').addEventListener('change', () => {
         executarAnaliseEspacial();
         atualizarVeracidade();
@@ -273,38 +332,70 @@ function configurarEventosUI() {
     radioButtons.forEach(radio => {
         radio.addEventListener('change', executarAnaliseEspacial);
     });
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        // Quando o usuário interagir e selecionar algo no datalist
+        searchInput.addEventListener('change', (e) => {
+            const val = e.target.value;
+            const options = document.querySelectorAll('#city-datalist option');
+            for (const option of options) {
+                if (option.value === val) {
+                    searchInput.dataset.currentId = option.dataset.id;
+                    mudarCidade(option.dataset.id);
+                    break;
+                }
+            }
+        });
+        
+        // Limpar ao clicar
+        searchInput.addEventListener('focus', (e) => {
+            e.target.value = '';
+        });
+    }
+
+    const popToggleEl = document.getElementById('pop-toggle');
+    if (popToggleEl) {
+        popToggleEl.addEventListener('change', executarAnaliseEspacial);
+    }
+
+    const modal = document.getElementById('modal-metodologia');
+    const btnMetodologia = document.getElementById('btn-metodologia');
+    const btnCloseModal = document.getElementById('btn-close-modal');
+    if (modal && btnMetodologia && btnCloseModal) {
+        btnMetodologia.addEventListener('click', () => {
+            modal.classList.remove('hidden');
+        });
+        btnCloseModal.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.classList.add('hidden');
+        });
+    }
 }
 
-async function mudarCidade() {
-    const locationId = document.getElementById('city-select').value;
+async function mudarCidade(explicitLocationId = null) {
+    const locationId = explicitLocationId || document.getElementById('search-input').dataset.currentId;
     
     let config;
     if (viewMode === 'cidades') config = CONFIG_CIDADES_GERADO[locationId];
     else if (viewMode === 'estados') config = CONFIG_ESTADOS_GERADO[locationId];
     else if (viewMode === 'regioes') config = CONFIG_REGIOES_GERADO[locationId];
     
-    let zoomLevel = 14;
-    if (viewMode === 'estados') zoomLevel = 6;
-    if (viewMode === 'regioes') zoomLevel = 5;
-    
-    mapa.setView([config.lat, config.lng], zoomLevel);
-    
-    const regiaoNome = config.regiao;
+    let erbsDataLocal = null;
+    const regiaoNome = config.regiao || 'Centro-Oeste'; 
     const reg_filename = `erbs_${regiaoNome.replace(' ', '')}.json`;
-    
-    let erbsDataLocal = erbsDataCache[regiaoNome];
-    if (!erbsDataLocal) {
-        document.getElementById('loading-overlay').style.display = 'flex';
-        document.querySelector('#loading-overlay p').innerText = 'Baixando dados da região...';
+    if (erbsDataCache[regiaoNome]) {
+        erbsDataLocal = erbsDataCache[regiaoNome];
+    } else {
         try {
             const response = await fetch(`data/${reg_filename}`);
             erbsDataLocal = await response.json();
             erbsDataCache[regiaoNome] = erbsDataLocal;
         } catch (error) {
-            console.error("Erro ao carregar dados da região:", error);
-            erbsDataLocal = {};
+            console.error("Erro carregando ERBs da regiao", regiaoNome, error);
         }
-        document.getElementById('loading-overlay').style.display = 'none';
     }
     
     // Download da Malha do IBGE (se existir código)
@@ -335,6 +426,21 @@ async function mudarCidade() {
     }
 
     gerarMalhaInfraestrutura(locationId, erbsDataLocal);
+    
+    if (malhaPoligonoAtual) {
+        try {
+            const bbox = turf.bbox(malhaPoligonoAtual);
+            mapa.flyToBounds([[bbox[1], bbox[0]], [bbox[3], bbox[2]]], { duration: 1.5, padding: [20, 20] });
+        } catch (e) {
+            console.error("Erro ao calcular bbox com turf:", e);
+        }
+    } else {
+        let zoomLevel = 14;
+        if (viewMode === 'estados') zoomLevel = 6;
+        if (viewMode === 'regioes') zoomLevel = 5;
+        mapa.flyTo([config.lat, config.lng], zoomLevel, { duration: 1.5 });
+    }
+
     executarAnaliseEspacial();
     atualizarVeracidade();
 }
