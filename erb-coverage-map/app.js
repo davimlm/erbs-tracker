@@ -1,5 +1,6 @@
 // Configurações de propagação teórica por frequência (ambiente urbano denso)
 const CONFIG_PROPAGACAO = {
+    'all': { raioMetros: 1200, corCobertura: '#8e8e93' },  // Redes combinadas (usa raio max 700MHz)
     '700': { raioMetros: 1200, corCobertura: '#30d158' },  // Alto alcance/penetração
     '2600': { raioMetros: 600, corCobertura: '#0a84ff' },  // Médio alcance
     '3500': { raioMetros: 300, corCobertura: '#bf5af2' }   // Curto alcance (5G Puro)
@@ -133,7 +134,7 @@ function executarAnaliseEspacial() {
     // 2. Filtrar e Processar ERBs Ativas
     const erbsAtivas = basePointsERB.filter(erb => {
         const matchOp = operadoraSelecionada === 'all' || erb.operadora === operadoraSelecionada;
-        const matchFreq = erb.frequencias && erb.frequencias.includes(frequenciaSelecionada);
+        const matchFreq = frequenciaSelecionada === 'all' || (erb.frequencias && erb.frequencias.includes(frequenciaSelecionada));
         return matchOp && matchFreq;
     });
 
