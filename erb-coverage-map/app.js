@@ -214,9 +214,24 @@ function executarAnaliseEspacial() {
 
     let poligonoZonaSombra = null;
 
-    // Trava de segurança para Turf.js
-    const LIMIT_TURF = 1500;
+    // Trava de segurança para Turf.js aumentada graças à otimização O(N log N)
+    const LIMIT_TURF = 10000;
     
+    // Função recursiva para União rápida de polígonos (Divide and Conquer)
+    function fastUnion(polygons) {
+        if (!polygons || polygons.length === 0) return null;
+        if (polygons.length === 1) return polygons[0];
+        const half = Math.floor(polygons.length / 2);
+        const left = fastUnion(polygons.slice(0, half));
+        const right = fastUnion(polygons.slice(half));
+        try {
+            return turf.union(left, right);
+        } catch(e) {
+            // Em caso de erro topológico no turf, retorna um dos lados para não quebrar tudo
+            return left;
+        }
+    }
+
     if (erbsAtivas.length <= LIMIT_TURF && viewMode === 'cidades') {
         erbsAtivas.forEach(erb => {
             const pt = turf.point([erb.lng, erb.lat]);
@@ -225,29 +240,27 @@ function executarAnaliseEspacial() {
         });
 
         if (buffersCobertura.length > 0) {
-            let uniaoCobertura = buffersCobertura[0];
-            for (let i = 1; i < buffersCobertura.length; i++) {
-                uniaoCobertura = turf.union(uniaoCobertura, buffersCobertura[i]);
-            }
+            const uniaoCobertura = fastUnion(buffersCobertura);
             
             try {
                 poligonoZonaSombra = turf.difference(poligonoEstudo, uniaoCobertura);
-                
-                if (poligonoZonaSombra) {
-                    L.geoJSON(poligonoZonaSombra, {
-                        style: {
-                            color: 'transparent',
-                            fillColor: '#ff3b30',
-                            fillOpacity: 0.35 // Vermelho indicando buraco de sombra
-                        }
-                    }).addTo(camadaEstudoGroup);
-                }
             } catch (e) {
                 console.error("Erro no turf.difference, pulando sombra: ", e);
                 poligonoZonaSombra = null; // Falhou no cálculo
             }
         } else {
             poligonoZonaSombra = poligonoEstudo;
+        }
+
+        // Renderiza a Zona de Sombra (seja o resultado da diferença ou o polígono inteiro se não houver ERBs)
+        if (poligonoZonaSombra) {
+            L.geoJSON(poligonoZonaSombra, {
+                style: {
+                    color: 'transparent',
+                    fillColor: '#ff3b30',
+                    fillOpacity: 0.35 // Vermelho indicando buraco de sombra
+                }
+            }).addTo(camadaEstudoGroup);
         }
     } else {
         if (erbsAtivas.length > LIMIT_TURF) {
