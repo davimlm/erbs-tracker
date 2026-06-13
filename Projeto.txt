@@ -1,0 +1,68 @@
+a. Metas
+Meta Principal: Criar uma aplicação web interativa que cruze a localização das antenas (ERBs) com dados populacionais para identificar e visualizar "gargalos de infraestrutura" (áreas com alta população e baixa cobertura) no Brasil.
+
+b. Objetivos
+Obter e limpar a base de dados nacional de ERBs da Anatel.
+
+Obter e processar os dados populacionais e a malha geográfica municipal do IBGE.
+
+Desenvolver um algoritmo/script matemático para calcular o índice de "habitantes por ERB" e mapear o raio de alcance baseado nas frequências (700MHz, 2600MHz, 3500MHz).
+
+Desenvolver a interface front-end (HTML, CSS, JS) utilizando a biblioteca Leaflet.js para renderização do mapa.
+
+Integrar os dados tratados à interface para permitir filtros dinâmicos por operadora, tecnologia e região.
+
+c. Entregáveis
+Base de Dados Consolidada: Arquivo tratado cruzando Anatel e IBGE.
+
+Repositório de Código: Código-fonte da aplicação (scripts de processamento Python + front-end web).
+
+Prova de Conceito (PoC) Funcional: O aplicativo web rodando no navegador com o mapa interativo, painel de métricas e filtros.
+
+Apresentação Final: Slides contendo o contexto, a metodologia e a demonstração dos resultados.
+
+d. Responsabilidades
+(Você precisará substituir os colchetes pelos nomes dos integrantes do seu grupo)
+
+[Nome 1]: Engenharia de Dados e Backend - Ficará responsável por baixar as bases da Anatel/IBGE, limpar os dados usando Python (Pandas/Geopandas) e gerar os arquivos finais que alimentarão o mapa.
+
+[Nome 2]: Desenvolvimento Front-end e UI/UX - Responsável por montar a estrutura da página (HTML/CSS), aplicar o design escuro (Dark Mode/Glassmorphism) e criar os painéis flutuantes.
+
+[Nome 3]: Lógica Geoespacial e Integração - Ficará com a parte do JavaScript (Leaflet e Turf.js), garantindo que os polígonos de sombra, cálculos de raio de alcance e a renderização do mapa funcionem corretamente.
+
+[Nome 4]: Gestão do Projeto, Documentação e Apresentação - Manterá o Trello atualizado, documentará os gargalos encontrados pela ferramenta para criar o relatório e montará os slides finais.
+
+e. Cronograma
+Data Final Imutável: 07 de Agosto
+
+Semana 1 e 2 (15/06 a 28/06) – Estruturação e Dados:
+
+Criação do Trello e divisão de tarefas.
+
+Download e tratamento das bases de dados (Anatel e IBGE).
+
+Semana 3 e 4 (29/06 a 12/07) – Lógica e Cálculo Espacial:
+
+Cruzamento das bases para definir as métricas (ERBs per capita).
+
+Programação da lógica geoespacial (cálculo de alcance e zonas de sombra).
+
+Semana 5 e 6 (13/07 a 26/07) – Desenvolvimento da Interface:
+
+Construção do mapa no Leaflet.js.
+
+Implementação da interface web e integração dos filtros (Operadora/Frequência).
+
+Semana 7 (27/07 a 02/08) – Testes e Refinamento:
+
+Correção de bugs visuais e ajustes de desempenho no carregamento do mapa.
+
+Validação final se o mapa identifica corretamente os gargalos.
+
+Semana 8 (03/08 a 06/08) – Fechamento:
+
+Elaboração dos slides da apresentação.
+
+Ensaio da demonstração da ferramenta.
+
+Dia 07 de Agosto: Apresentação Final do Projeto.

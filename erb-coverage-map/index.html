@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Cobertura ERB e Zonas de Sombra</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Baixando dados da região...</p>
+    </div>
+
+    <div class="control-panel">
+        <h1>Cobertura ERB</h1>
+        <p class="subtitle">Análise Espacial de Zonas de Sombra</p>
+
+        <div class="control-group">
+            <label>Visão do Mapa</label>
+            <div class="segmented-control" id="view-mode-tabs">
+                <button class="segment-btn active" data-mode="cidades">Cidades</button>
+                <button class="segment-btn" data-mode="estados">Estados</button>
+                <button class="segment-btn" data-mode="regioes">Regiões</button>
+            </div>
+            <select id="city-select">
+                <!-- Opções populadas dinamicamente via Javascript -->
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="operator-select">Operadora</label>
+            <select id="operator-select">
+                <option value="all">Todas as Operadoras</option>
+                <option value="vivo">Vivo</option>
+                <option value="claro">Claro</option>
+                <option value="tim">TIM</option>
+                <option value="algar">Algar Telecom</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Tecnologia / Frequência</label>
+            <div class="radio-tile-group">
+                <div class="input-container">
+                    <input id="freq-700" type="radio" name="frequency" value="700" checked>
+                    <div class="radio-tile">
+                        <span class="radio-label">4G / 5G Broad</span>
+                        <span class="radio-desc">700 MHz</span>
+                    </div>
+                </div>
+                <div class="input-container">
+                    <input id="freq-2600" type="radio" name="frequency" value="2600">
+                    <div class="radio-tile">
+                        <span class="radio-label">4G High</span>
+                        <span class="radio-desc">2.6 GHz</span>
+                    </div>
+                </div>
+                <div class="input-container">
+                    <input id="freq-3500" type="radio" name="frequency" value="3500">
+                    <div class="radio-tile">
+                        <span class="radio-label">5G Standalone</span>
+                        <span class="radio-desc">3.5 GHz</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-panel">
+            <h2>Métricas da Região</h2>
+            <div class="stat-row">
+                <span>ERBs Ativas na Análise:</span>
+                <span id="stat-erb-count" class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Área Total de Estudo:</span>
+                <span id="stat-total-area" class="stat-value">0 km²</span>
+            </div>
+            <div class="stat-row">
+                <span>População:</span>
+                <span id="stat-population" class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Habitantes por ERB:</span>
+                <span id="stat-hab-erb" class="stat-value">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Zona de Sombra (Vazio):</span>
+                <span id="stat-shadow-percent" class="stat-value shadow-alert">0%</span>
+            </div>
+            <div class="progress-bar-container">
+                <div id="shadow-progress" class="progress-bar"></div>
+            </div>
+        </div>
+
+        <div class="stats-panel veracity-panel">
+            <h2>Veracidade e Cruzamento de Dados</h2>
+            <div class="stat-row">
+                <span>Fonte Anatel / Mosaico:</span>
+                <span class="stat-value" style="color: #0a84ff;">Base Atualizada</span>
+            </div>
+            <div class="stat-row">
+                <span>Market Share (Teleco):</span>
+                <span id="veracity-teleco" class="stat-value">Validado</span>
+            </div>
+            <div class="stat-row">
+                <span>Status da Rede (Downdetector):</span>
+                <span id="veracity-downdetector" class="stat-value success-text">Estável</span>
+            </div>
+            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 8px; line-height: 1.4;">* Cruzamento em tempo real simulando APIs do Downdetector para ocorrências de falhas e bases da Teleco para densidade.</p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    
+    <script charset="utf-8" src="data/config.js"></script>
+    <script src="app.js?v=2"></script>
+</body>
+</html>

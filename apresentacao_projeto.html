@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Análise de ERBs no Brasil - Identificação de Gargalos de Cobertura</title>
+<style>
+  :root{
+    --primary:#1a3a5c;
+    --accent:#2e8bc0;
+    --bg:#f4f7fa;
+    --card:#ffffff;
+    --text:#2c2c2c;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:'Segoe UI', Arial, sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.6;
+  }
+  header{
+    background:linear-gradient(135deg, var(--primary), var(--accent));
+    color:#fff;
+    padding:60px 20px;
+    text-align:center;
+  }
+  header h1{font-size:2.4em;margin-bottom:10px;}
+  header p{font-size:1.1em;opacity:0.9;}
+  .container{
+    max-width:980px;
+    margin:0 auto;
+    padding:40px 20px;
+  }
+  section{
+    background:var(--card);
+    border-radius:10px;
+    padding:30px;
+    margin-bottom:30px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.06);
+  }
+  h2{
+    color:var(--primary);
+    border-left:5px solid var(--accent);
+    padding-left:12px;
+    margin-bottom:15px;
+    font-size:1.5em;
+  }
+  h3{color:var(--primary); margin-bottom:8px; font-size:1.05em;}
+  ul{padding-left:22px;}
+  li{margin-bottom:8px;}
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
+    gap:20px;
+    margin-top:15px;
+  }
+  .card{
+    background:#eef4f9;
+    border-radius:8px;
+    padding:20px;
+    border-top:4px solid var(--accent);
+  }
+  .tag{
+    display:inline-block;
+    background:var(--accent);
+    color:#fff;
+    font-size:0.75em;
+    padding:3px 10px;
+    border-radius:20px;
+    margin-right:6px;
+    margin-bottom:6px;
+  }
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px,1fr));
+    gap:15px;
+    margin-top:15px;
+  }
+  .stat{
+    text-align:center;
+    background:var(--primary);
+    color:#fff;
+    border-radius:8px;
+    padding:18px 10px;
+  }
+  .stat .num{font-size:1.8em; font-weight:bold;}
+  .stat .label{font-size:0.85em; opacity:0.85;}
+  .flow{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+    margin-top:15px;
+  }
+  .flow .step{
+    background:#eef4f9;
+    border:1px solid var(--accent);
+    border-radius:8px;
+    padding:12px 16px;
+    flex:1;
+    min-width:160px;
+    text-align:center;
+    font-size:0.9em;
+  }
+  .flow .arrow{
+    font-size:1.4em;
+    color:var(--accent);
+  }
+  footer{
+    text-align:center;
+    padding:30px;
+    color:#777;
+    font-size:0.9em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Mapeamento de ERBs e Identificação de Gargalos de Cobertura no Brasil</h1>
+  <p>Proposta de aplicação web para análise geográfica de infraestrutura de telecomunicações</p>
+</header>
+
+<div class="container">
+
+  <section>
+    <h2>1. Contexto e Problema</h2>
+    <p>
+      A cobertura de telefonia móvel no Brasil é garantida por uma rede de Estações Rádio Base (ERBs)
+      distribuídas de forma desigual pelo território. Em regiões densamente povoadas, a falta de
+      ERBs próximas pode gerar sobrecarga de rede, sinal fraco e baixa qualidade de serviço — mesmo
+      em áreas urbanas. Identificar esses "gargalos", onde existe população significativa mas
+      cobertura insuficiente, é fundamental para discutir prioridades de investimento em
+      infraestrutura.
+    </p>
+  </section>
+
+  <section>
+    <h2>2. Base de Dados</h2>
+    <p>
+      Foi obtida uma base com o cadastro nacional de ERBs (ANATEL, referência mar/2026), contendo
+      localização, operadora, tecnologia e faixa de frequência de cada estação.
+    </p>
+    <div class="stats">
+      <div class="stat"><div class="num">110.045</div><div class="label">ERBs no Brasil</div></div>
+      <div class="stat"><div class="num">5.296</div><div class="label">municípios com ERB</div></div>
+      <div class="stat"><div class="num">24.449</div><div class="label">ERBs em SP</div></div>
+      <div class="stat"><div class="num">7</div><div class="label">operadoras (Vivo, Tim, Claro...)</div></div>
+    </div>
+    <p style="margin-top:15px;">
+      <strong>Colunas disponíveis:</strong> Número da Estação, Operadora, UF, Município, Bairro,
+      Logradouro, Latitude, Longitude, Código IBGE, Classe de Infraestrutura Física, Tecnologias
+      (2G/3G/4G/5G) e Faixas de Frequência.
+    </p>
+  </section>
+
+  <section>
+    <h2>3. Objetivo do Projeto</h2>
+    <p>
+      Desenvolver uma aplicação web que cruze a localização das ERBs com dados populacionais do
+      IBGE, permitindo identificar regiões do Brasil onde a densidade de cobertura de rede é
+      desproporcionalmente baixa em relação à população residente — os possíveis "gargalos" de
+      infraestrutura.
+    </p>
+  </section>
+
+  <section>
+    <h2>4. Metodologia Proposta</h2>
+    <div class="flow">
+      <div class="step">1. Tratar base de ERBs<br>(coordenadas + tecnologia)</div>
+      <div class="arrow">→</div>
+      <div class="step">2. Obter dados IBGE<br>(população por município/setor censitário)</div>
+      <div class="arrow">→</div>
+      <div class="step">3. Calcular densidade<br>de ERBs por área/população</div>
+      <div class="arrow">→</div>
+      <div class="step">4. Cruzar e classificar<br>regiões (gargalo / adequado)</div>
+      <div class="arrow">→</div>
+      <div class="step">5. Visualizar no mapa<br>interativo</div>
+    </div>
+    <p style="margin-top:15px;">
+      Como indicador inicial de "gargalo", propõe-se um índice de
+      <strong>ERBs per capita</strong> ou <strong>habitantes por ERB</strong> por município/região,
+      considerando também o alcance estimado de cada estação a partir da tecnologia e faixa de
+      frequência (faixas mais altas, como 3500 MHz, indicam menor raio de alcance; faixas baixas,
+      como 700/900 MHz, indicam maior alcance).
+    </p>
+  </section>
+
+  <section>
+    <h2>5. Funcionalidades da Aplicação</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>🗺️ Mapa Interativo</h3>
+        <p>Visualização das ERBs e da malha municipal, com camadas de população e densidade de cobertura.</p>
+      </div>
+      <div class="card">
+        <h3>🚦 Indicador de Gargalo</h3>
+        <p>Classificação visual (ex: verde/amarelo/vermelho) das regiões conforme relação ERBs x população.</p>
+      </div>
+      <div class="card">
+        <h3>🔍 Filtros</h3>
+        <p>Por UF, município, operadora e tecnologia (2G/3G/4G/5G).</p>
+      </div>
+      <div class="card">
+        <h3>📊 Ranking de Regiões</h3>
+        <p>Lista de municípios/regiões com maior carência relativa de cobertura.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>6. Fontes de Dados</h2>
+    <ul>
+      <li>Base de ERBs - ANATEL (já obtida, mar/2026, 110 mil registros)</li>
+      <li>População por município - IBGE (Censo / estimativas populacionais)</li>
+      <li>Malha geográfica municipal - IBGE (shapefiles para mapas)</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>7. Tecnologias Previstas</h2>
+    <div>
+      <span class="tag">Python (pandas/geopandas)</span>
+      <span class="tag">Leaflet.js</span>
+      <span class="tag">HTML/CSS/JS</span>
+      <span class="tag">Dados ANATEL</span>
+      <span class="tag">Dados IBGE</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>8. Resultados Esperados</h2>
+    <p>
+      A ferramenta deve permitir visualizar, de forma clara, quais regiões do Brasil concentram
+      população significativa mas possuem baixa densidade de ERBs — apontando possíveis gargalos
+      de infraestrutura de telecomunicações e servindo de apoio a discussões sobre priorização de
+      investimentos.
+    </p>
+  </section>
+
+</div>
+
+<footer>
+  Trabalho acadêmico — Soluções em Engenharia | Proposta de Projeto
+</footer>
+
+</body>
+</html>
