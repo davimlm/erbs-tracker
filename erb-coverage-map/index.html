@@ -13,6 +13,10 @@
     <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
+    <div id="loading-spinner" class="spinner-container" style="display: none;">
+        <div class="spinner"></div>
+        <p>Cruzando Malha Demográfica (IBGE)...</p>
+    </div>
 
     <div id="map"></div>
 
@@ -38,15 +42,27 @@
             </datalist>
         </div>
 
-        <div class="control-group">
-            <label for="operator-select">Operadora</label>
-            <select id="operator-select">
-                <option value="all">Todas as Operadoras</option>
-                <option value="vivo">Vivo</option>
-                <option value="claro">Claro</option>
-                <option value="tim">TIM</option>
-                <option value="algar">Algar Telecom</option>
-            </select>
+        <!-- Controle Superior: Operadora e População -->
+        <div class="top-controls glass-panel">
+            <div class="control-group">
+                <label for="operator-select">Operadora</label>
+                <select id="operator-select">
+                    <option value="all">Todas as Redes (Combinadas)</option>
+                    <option value="vivo">Vivo</option>
+                    <option value="claro">Claro</option>
+                    <option value="tim">TIM</option>
+                </select>
+            </div>
+            
+            <div class="control-group toggle-group">
+                <label for="pop-toggle" class="toggle-label">
+                    População Real (Censo IBGE)
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="pop-toggle">
+                        <span class="slider round"></span>
+                    </div>
+                </label>
+            </div>
         </div>
 
         <div class="control-group">
@@ -83,47 +99,25 @@
             </div>
         </div>
 
-        <div class="control-group toggle-group" style="margin-top: 10px;">
-            <label for="pop-toggle" class="toggle-label">
-                Distribuição Populacional (Simulada)
-                <div class="toggle-switch">
-                    <input type="checkbox" id="pop-toggle">
-                    <span class="slider round"></span>
-                </div>
-            </label>
-        </div>
-        
         <button id="btn-metodologia" class="btn-primary" style="margin-top: 15px; margin-bottom: 5px;">Como o cálculo é feito?</button>
 
-        <div class="stats-panel">
+        <div class="stats-panel glass-panel" id="stats-panel">
+            <h2>Métricas da Região</h2>
+            
             <div class="stat-row">
-                <span>Total de ERBs:</span>
-                <span id="stat-erbs" class="stat-value highlight-number">0</span>
+                <span>Antenas Ativas:</span>
+                <span id="stat-erb-count" class="stat-value">0</span>
             </div>
             <div class="stat-row">
-                <span>Raio Estimado (M):</span>
-                <span id="stat-radius" class="stat-value">0 km</span>
+                <span>Pop. Total na Região:</span>
+                <span id="stat-total-pop" class="stat-value">0 hab.</span>
             </div>
             <div class="stat-row">
-                <span>Habitantes / ERB:</span>
-                <span id="stat-hab-erb" class="stat-value warning-text">0</span>
+                <span>Pop. em Área de Sombra:</span>
+                <span id="stat-shadow-pop" class="stat-value shadow-alert">0 hab.</span>
             </div>
-            <hr style="border: 0; height: 1px; background: rgba(255,255,255,0.1); margin: 12px 0;">
-            <div class="stat-row">
-                <span>Área de Análise:</span>
-                <span id="stat-total-area" class="stat-value">0 km²</span>
-            </div>
-            <div class="stat-row">
-                <span>Zona de Sombra (Vazio):</span>
-                <span id="stat-shadow-percent" class="stat-value shadow-alert">0%</span>
-            </div>
-            <div class="stat-row">
-                <span>População Impactada:</span>
-                <span id="stat-impacted-pop" class="stat-value shadow-alert">0</span>
-            </div>
-            <div class="stat-row">
-                <span>Market Share (Teleco):</span>
-                <span id="veracity-teleco" class="stat-value">Validado</span>
+            <div class="progress-bar-container">
+                <div id="shadow-progress" class="progress-bar"></div>
             </div>
         </div>
 
@@ -161,7 +155,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     
-    <script charset="utf-8" src="data/config.js?v=9"></script>
-    <script src="app.js?v=9"></script>
+    <script charset="utf-8" src="data/config.js?v=10"></script>
+    <script src="app.js?v=10"></script>
 </body>
 </html>

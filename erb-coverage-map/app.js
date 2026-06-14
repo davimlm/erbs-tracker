@@ -10,14 +10,35 @@ const CONFIG_PROPAGACAO = {
 let mapa;
 let camadaEstudoGroup;
 let camadaDadosGroup;
-let camadaPopulacaoGroup; // Nova camada para os pontos simulados
+let camadaPopulacaoGroup; // Nova camada para os pontos reais do IBGE
 let basePointsERB = []; // Armazena a infraestrutura fixa para evitar mutações de posição
+let dadosPopulacaoIBGE = []; // Armazena os dados reais em memória
 // CONFIG_CIDADES_GERADO já vêm carregados via tag <script> no HTML (config.js)
 let erbsDataCache = {}; // Cache de macrorregiões
 let malhasIbgeCache = {}; // Cache de contornos IBGE
 let malhaPoligonoAtual = null; // Guarda o GeoJSON da malha atual
 
 let viewMode = 'cidades'; // 'cidades', 'estados', 'regioes'
+
+// Função para buscar o JSON gerado pelo Python
+async function carregarDadosIBGE(cidadeId) {
+    if (viewMode !== 'cidades') return;
+    
+    // Normaliza o nome da cidade para bater com o arquivo python gerado
+    const normalizeId = cidadeId.replace('_sp', '').replace('_rj', '').replace('_mg', '').replace('_df', '');
+    try {
+        const response = await fetch(`data/populacao_real_${normalizeId}.json`);
+        if (response.ok) {
+            dadosPopulacaoIBGE = await response.json();
+        } else {
+            console.warn("Sem dados do censo para", cidadeId);
+            dadosPopulacaoIBGE = [];
+        }
+    } catch (error) {
+        console.error("Erro ao carregar dados populacionais do IBGE:", error);
+        dadosPopulacaoIBGE = [];
+    }
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     inicializarMapa();
@@ -120,6 +141,17 @@ function gerarMalhaInfraestrutura(locationId, erbsDataLocal) {
 }
 
 function executarAnaliseEspacial() {
+    const spinner = document.getElementById('loading-spinner');
+    if (spinner) spinner.style.display = 'flex';
+    
+    // Yield execution so the browser can paint the spinner
+    setTimeout(() => {
+        _executarAnaliseEspacialInterno();
+        if (spinner) spinner.style.display = 'none';
+    }, 50);
+}
+
+function _executarAnaliseEspacialInterno() {
     // Limpar camadas anteriores
     camadaEstudoGroup.clearLayers();
     camadaDadosGroup.clearLayers();
@@ -240,19 +272,21 @@ function executarAnaliseEspacial() {
         });
 
         if (buffersCobertura.length > 0) {
-            const uniaoCobertura = fastUnion(buffersCobertura);
-            
+    const uniaoCobertura = fastUnion(buffersCobertura);
+
+    // Renderiza a Zona de Sombra
+    if (erbsAtivas.length <= LIMIT_TURF && viewMode === 'cidades') {
+        if (buffersCobertura.length > 0) {
             try {
                 poligonoZonaSombra = turf.difference(poligonoEstudo, uniaoCobertura);
             } catch (e) {
                 console.error("Erro no turf.difference, pulando sombra: ", e);
-                poligonoZonaSombra = null; // Falhou no cálculo
+                poligonoZonaSombra = null;
             }
         } else {
             poligonoZonaSombra = poligonoEstudo;
         }
 
-        // Renderiza a Zona de Sombra (seja o resultado da diferença ou o polígono inteiro se não houver ERBs)
         if (poligonoZonaSombra) {
             L.geoJSON(poligonoZonaSombra, {
                 style: {
@@ -262,74 +296,58 @@ function executarAnaliseEspacial() {
                 }
             }).addTo(camadaEstudoGroup);
         }
-    } else {
-        if (erbsAtivas.length > LIMIT_TURF) {
-            console.warn(`[Segurança] ${erbsAtivas.length} antenas na tela. O cálculo matemático de sombra (Turf.js) foi desligado para não travar o navegador.`);
-        }
+    } else if (viewMode === 'cidades' && erbsAtivas.length > LIMIT_TURF) {
+        console.warn(`[Segurança] ${erbsAtivas.length} antenas na tela. O cálculo matemático de sombra (Turf.js) foi desligado.`);
     }
 
     // ==========================================
-    // Simulação Estatística da População
+    // NOVO: Cálculo Cirúrgico de População Real
     // ==========================================
     const popToggleEl = document.getElementById('pop-toggle');
     const mostrarPopulacao = popToggleEl ? popToggleEl.checked : false;
 
-    if (mostrarPopulacao && viewMode === 'cidades' && poligonoEstudo) {
-        // Geramos pontos simulados para representar a distribuição populacional (max 1000)
-        const bboxPop = turf.bbox(poligonoEstudo);
-        const pontosSimulados = turf.randomPoint(1000, { bbox: bboxPop });
-        
-        turf.featureEach(pontosSimulados, function (currentFeature) {
-            // Filter points to only those exactly inside the city polygon
-            if (turf.booleanPointInPolygon(currentFeature, poligonoEstudo)) {
-                let estaNaSombra = false;
-                if (poligonoZonaSombra) {
-                    try {
-                        estaNaSombra = turf.booleanPointInPolygon(currentFeature, poligonoZonaSombra);
-                    } catch (e) { }
-                }
+    let populacaoTotal = 0;
+    let populacaoSombra = 0;
 
-                const corPonto = estaNaSombra ? '#ff453a' : '#86868b';
-                const coords = currentFeature.geometry.coordinates;
+    if (viewMode === 'cidades') {
+        // Iterar sobre os milhares de centróides reais do IBGE
+        dadosPopulacaoIBGE.forEach(setor => {
+            populacaoTotal += setor.populacao;
+            
+            const pt = turf.point([setor.lng, setor.lat]);
+            let estaNaSombra = true;
 
-                L.circleMarker([coords[1], coords[0]], {
-                    radius: 2,
+            if (uniaoCobertura) {
+                // Se o ponto estiver dentro da união das coberturas, ele NÃO está na sombra
+                estaNaSombra = !turf.booleanPointInPolygon(pt, uniaoCobertura);
+            }
+
+            if (estaNaSombra) {
+                populacaoSombra += setor.populacao;
+            }
+
+            // Renderiza no mapa como um heatmap sutil (apenas se o toggle estiver ativo)
+            if (mostrarPopulacao) {
+                const corPonto = estaNaSombra ? '#ff453a' : '#86868b'; // Vermelho se gargalo, cinza se coberto
+                L.circleMarker([setor.lat, setor.lng], {
+                    radius: 2, // Reduzido para não poluir
                     fillColor: corPonto,
                     color: corPonto,
                     weight: 0,
-                    fillOpacity: estaNaSombra ? 1 : 0.4
+                    fillOpacity: estaNaSombra ? 1 : 0.4 // Destaca as áreas críticas
                 }).addTo(camadaPopulacaoGroup);
             }
         });
     }
 
-    // 6. Atualização de Métricas
-    const areaTotalKm2 = turf.area(poligonoEstudo) / 1000000;
-    const areaSombraKm2 = poligonoZonaSombra ? (turf.area(poligonoZonaSombra) / 1000000) : 0;
-    const percentSombraCalculado = ((areaSombraKm2 / areaTotalKm2) * 100);
-    const percentualSombra = viewMode === 'cidades' ? percentSombraCalculado.toFixed(1) : 'N/A';
+    // 6. Atualização de Métricas Exatas
+    const percentSombraCalculado = populacaoTotal > 0 ? ((populacaoSombra / populacaoTotal) * 100) : 0;
+    const percentualSombra = viewMode === 'cidades' && populacaoTotal > 0 ? percentSombraCalculado.toFixed(1) : 'N/A';
 
-    // População e Habitantes por ERB
-    const pop = configLocal.populacao || 0;
-    const habErb = erbsAtivas.length > 0 ? Math.round(pop / erbsAtivas.length) : pop;
-
-    let popImpactada = 0;
-    if (viewMode === 'cidades' && !isNaN(percentSombraCalculado)) {
-        popImpactada = Math.round(pop * (percentSombraCalculado / 100));
-    }
-
-    document.getElementById('stat-erbs').innerText = erbsAtivas.length.toLocaleString('pt-BR');
-    document.getElementById('stat-radius').innerText = (raioMetros / 1000).toFixed(2) + ' km';
-    document.getElementById('stat-hab-erb').innerText = viewMode === 'cidades' ? habErb.toLocaleString('pt-BR') : '--';
+    document.getElementById('stat-erb-count').innerText = erbsAtivas.length.toLocaleString('pt-BR');
+    document.getElementById('stat-total-pop').innerText = viewMode === 'cidades' ? populacaoTotal.toLocaleString('pt-BR') + ' hab.' : '--';
+    document.getElementById('stat-shadow-pop').innerText = viewMode === 'cidades' ? `${populacaoSombra.toLocaleString('pt-BR')} hab. (${percentualSombra}%)` : '--';
     
-    document.getElementById('stat-total-area').innerText = viewMode === 'cidades' ? areaTotalKm2.toFixed(1) + ' km²' : '-- km²';
-    document.getElementById('stat-shadow-percent').innerText = percentualSombra !== 'N/A' ? percentualSombra + '%' : '--';
-    
-    const popImpEl = document.getElementById('stat-impacted-pop');
-    if (popImpEl) {
-        popImpEl.innerText = viewMode === 'cidades' ? popImpactada.toLocaleString('pt-BR') : '--';
-    }
-
     const shadowProgressEl = document.getElementById('shadow-progress');
     if (shadowProgressEl) {
         shadowProgressEl.style.width = viewMode === 'cidades' ? `${percentualSombra}%` : '0%';
@@ -454,6 +472,9 @@ async function mudarCidade(explicitLocationId = null) {
         if (viewMode === 'regioes') zoomLevel = 5;
         mapa.flyTo([config.lat, config.lng], zoomLevel, { duration: 1.5 });
     }
+
+    // Carrega a base real antes de calcular a análise
+    await carregarDadosIBGE(locationId);
 
     executarAnaliseEspacial();
     atualizarVeracidade();
