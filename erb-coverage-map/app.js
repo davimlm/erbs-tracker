@@ -264,7 +264,9 @@ function _executarAnaliseEspacialInterno() {
         }
     }
 
-    if (erbsAtivas.length <= LIMIT_TURF && viewMode === 'cidades') {
+    let uniaoCobertura = null;
+
+    if (erbsAtivas.length <= LIMIT_TURF) {
         erbsAtivas.forEach(erb => {
             const pt = turf.point([erb.lng, erb.lat]);
             const buffered = turf.buffer(pt, raioMetros, {units: 'meters'});
@@ -272,11 +274,9 @@ function _executarAnaliseEspacialInterno() {
         });
 
         if (buffersCobertura.length > 0) {
-    const uniaoCobertura = fastUnion(buffersCobertura);
+            uniaoCobertura = fastUnion(buffersCobertura);
 
-    // Renderiza a Zona de Sombra
-    if (erbsAtivas.length <= LIMIT_TURF && viewMode === 'cidades') {
-        if (buffersCobertura.length > 0) {
+            // Renderiza a Zona de Sombra
             try {
                 poligonoZonaSombra = turf.difference(poligonoEstudo, uniaoCobertura);
             } catch (e) {
@@ -296,7 +296,7 @@ function _executarAnaliseEspacialInterno() {
                 }
             }).addTo(camadaEstudoGroup);
         }
-    } else if (viewMode === 'cidades' && erbsAtivas.length > LIMIT_TURF) {
+    } else if (erbsAtivas.length > LIMIT_TURF) {
         console.warn(`[Segurança] ${erbsAtivas.length} antenas na tela. O cálculo matemático de sombra (Turf.js) foi desligado.`);
     }
 
