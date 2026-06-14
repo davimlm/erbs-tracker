@@ -369,20 +369,60 @@ function configurarEventosUI() {
     if (searchInput) {
         // Quando o usuário interagir e selecionar algo no datalist
         searchInput.addEventListener('change', (e) => {
-            const val = e.target.value;
+            const val = e.target.value.toLowerCase().trim();
+            if (!val) return; // Ignore clear
+            
             const options = document.querySelectorAll('#city-datalist option');
+            let match = null;
+            
+            // 1. Tenta correspondência exata
             for (const option of options) {
-                if (option.value === val) {
-                    searchInput.dataset.currentId = option.dataset.id;
-                    mudarCidade(option.dataset.id);
-                    break;
+                if (option.value.toLowerCase() === val) {
+                    match = option; break;
                 }
+            }
+            
+            // 2. Tenta correspondência parcial (ex: ignorando acentos ou final)
+            if (!match) {
+                for (const option of options) {
+                    if (option.value.toLowerCase().includes(val)) {
+                        match = option; break;
+                    }
+                }
+            }
+            
+            if (match) {
+                searchInput.value = match.value;
+                if (searchInput.dataset.currentId !== match.dataset.id) {
+                    searchInput.dataset.currentId = match.dataset.id;
+                    mudarCidade(match.dataset.id);
+                }
+            } else {
+                // Reverte para o nome atual se não encontrou nada
+                let configLocal;
+                const cid = searchInput.dataset.currentId;
+                if (viewMode === 'cidades') configLocal = CONFIG_CIDADES_GERADO[cid];
+                else if (viewMode === 'estados') configLocal = CONFIG_ESTADOS_GERADO[cid];
+                else if (viewMode === 'regioes') configLocal = CONFIG_REGIOES_GERADO[cid];
+                if (configLocal) searchInput.value = configLocal.nome;
             }
         });
         
         // Limpar ao clicar
         searchInput.addEventListener('focus', (e) => {
             e.target.value = '';
+        });
+        
+        // Se sair do campo sem escolher, volta pro valor salvo
+        searchInput.addEventListener('blur', (e) => {
+            if (e.target.value.trim() === '') {
+                const cid = searchInput.dataset.currentId;
+                let configLocal;
+                if (viewMode === 'cidades') configLocal = CONFIG_CIDADES_GERADO[cid];
+                else if (viewMode === 'estados') configLocal = CONFIG_ESTADOS_GERADO[cid];
+                else if (viewMode === 'regioes') configLocal = CONFIG_REGIOES_GERADO[cid];
+                if (configLocal) searchInput.value = configLocal.nome;
+            }
         });
     }
 
