@@ -54,11 +54,3 @@ Cadastro nacional de ERBs (ANATEL, referência mar/2026):
 
 Identificação visual das regiões do Brasil que concentram população significativa, mas possuem baixa densidade de ERBs, servindo como apoio a discussões sobre priorização de investimentos em infraestrutura de telecomunicações.
 
-## Status do Projeto
-
-🔵 Em fase de proposta/conceito — trabalho acadêmico de Soluções em Engenharia.
-
-## Arquivos
-
-- `apresentacao_projeto.html` — apresentação da proposta do projeto
-- `ERBs_Mar26.xlsx` — base de dados de ERBs (ANATEL, mar/2026)
