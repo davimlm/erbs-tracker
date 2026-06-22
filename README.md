@@ -40,7 +40,7 @@ Cadastro nacional de ERBs (ANATEL, referência mar/2026):
 
 ## Fontes de Dados
 
-- Base de ERBs — ANATEL
+- Base de ERBs — ANATEL/TELECO
 - População por município — IBGE (Censo/estimativas populacionais)
 - Malha geográfica municipal — IBGE (shapefiles)
 
