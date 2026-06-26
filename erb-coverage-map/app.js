@@ -118,46 +118,74 @@ async function executarAnaliseEspacial() {
         
         const data = await response.json();
         
-        // Renderizar Sombra
-        if (data.poligonoSombra) {
-            const estudoLayer = L.geoJSON(data.poligonoSombra, {
-                style: {
-                    color: '#ffffff',
-                    weight: 1,
-                    dashArray: '5, 5',
-                    fillColor: '#ff3b30',
-                    fillOpacity: 0.35
-                }
-            }).addTo(camadaEstudoGroup);
-
-            // Adaptar escala do mapa dinamicamente
-            if (estudoLayer.getBounds().isValid()) {
-                mapa.fitBounds(estudoLayer.getBounds(), { 
-                    padding: [20, 20],
-                    maxZoom: 12
-                });
-            }
+        // Renderizar H3 via MVT (Sombra, População e Vegetação)
+        if (window.currentMvtLayer) {
+            mapa.removeLayer(window.currentMvtLayer);
         }
         
-        // Renderizar Sombra Vegetativa (Área Verde)
-        if (mostrarVegetacao) {
-            if (data.aviso_area_verde) {
-                alert(data.aviso_area_verde);
-                if (vegToggleEl) vegToggleEl.checked = false;
-            } else if (data.poligonoVegetativo) {
-                L.geoJSON(data.poligonoVegetativo, {
-                    style: {
-                        color: '#30d158',
-                        weight: 0,
-                        fillColor: '#30d158',
-                        fillOpacity: 0.35
+        const tileUrl = `/api/tiles/{z}/{x}/{y}.pbf?operadora=${operadoraSelecionada}&frequencia=${frequenciaSelecionada}`;
+        window.currentMvtLayer = L.vectorGrid.protobuf(tileUrl, {
+            vectorTileLayerStyles: {
+                'cobertura': function(properties, zoom) {
+                    // Lógica de prioridade de renderização H3
+                    
+                    if (mostrarVegetacao && properties.percent_vegetacao > 0) {
+                        return {
+                            fillColor: '#30d158',
+                            fillOpacity: Math.max(0.2, properties.percent_vegetacao / 100),
+                            color: '#30d158',
+                            weight: 0
+                        };
                     }
-                }).addTo(camadaEstudoGroup);
-            }
+                    
+                    if (properties.na_sombra) {
+                        if (mostrarPopulacao && properties.populacao_estimada > 0) {
+                            return {
+                                fillColor: '#ff453a',
+                                fillOpacity: Math.min(1.0, properties.populacao_estimada / 500),
+                                color: '#ff453a',
+                                weight: 0
+                            };
+                        } else if (!mostrarPopulacao) {
+                            return {
+                                fillColor: '#ff3b30',
+                                fillOpacity: 0.35,
+                                color: '#ffffff',
+                                weight: 1,
+                                dashArray: '3, 3'
+                            };
+                        }
+                    } else {
+                        // Área Coberta
+                        if (mostrarPopulacao && properties.populacao_estimada > 0) {
+                            return {
+                                fillColor: '#86868b',
+                                fillOpacity: Math.min(0.8, properties.populacao_estimada / 500),
+                                color: '#86868b',
+                                weight: 0
+                            };
+                        }
+                    }
+                    
+                    return { weight: 0, fillOpacity: 0 };
+                }
+            },
+            interactive: false // Não precisa clicar nas células H3 por enquanto
+        }).addTo(mapa);
+        
+        // Focar no mapa se for a primeira vez
+        if (data.erbsAtivas.length > 0 && viewMode === 'cidades') {
+            const lats = data.erbsAtivas.map(e => e.lat);
+            const lngs = data.erbsAtivas.map(e => e.lng);
+            const bounds = [
+                [Math.min(...lats) - 0.05, Math.min(...lngs) - 0.05],
+                [Math.max(...lats) + 0.05, Math.max(...lngs) + 0.05]
+            ];
+            mapa.fitBounds(bounds);
         }
 
         // Renderizar ERBs
-        const configFrequencia = CONFIG_PROPAGACAO[frequenciaSelecionada];
+        const configFrequencia = CONFIG_PROPAGACAO[frequenciaSelecionada] || {raioMetros: 1200};
         const raioMetros = configFrequencia.raioMetros;
         const colorCoverage = frequenciaSelecionada === '700' ? '#0a84ff' : 
                               frequenciaSelecionada === '2600' ? '#ff9f0a' : '#bf5af2';
@@ -181,20 +209,6 @@ async function executarAnaliseEspacial() {
                 }).bindPopup(`<b>Operadora:</b> ${(erb.operadora || 'Desconhecida').toUpperCase()}`).addTo(camadaDadosGroup);
             }
         });
-
-        // Renderizar População (Heatmap)
-        if (mostrarPopulacao && data.populacao_pontos) {
-            data.populacao_pontos.forEach(p => {
-                const corPonto = p.na_sombra ? '#ff453a' : '#86868b';
-                L.circleMarker([p.lat, p.lng], {
-                    radius: 2,
-                    fillColor: corPonto,
-                    color: corPonto,
-                    weight: 0,
-                    fillOpacity: p.na_sombra ? 1 : 0.4
-                }).addTo(camadaPopulacaoGroup);
-            });
-        }
 
         // Atualizar Métricas
         const percentSombraCalculado = data.popTotal > 0 ? ((data.popSombra / data.popTotal) * 100) : 0;
