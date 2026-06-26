@@ -59,10 +59,15 @@ def gerar_mock_centroides_ibge(cidade):
     # Gera entre 3000 e 5000 centróides para simular a densidade do IBGE
     num_setores = random.randint(3000, 5000) 
     for i in range(num_setores):
+        # Distribuição normal (gaussiana) para parecer uma mancha urbana real
+        # em vez de um quadrado perfeito
+        lat_offset = random.gauss(0, 0.07)
+        lng_offset = random.gauss(0, 0.07)
+        
         pontos.append({
             "id_setor": f"setor_{i}",
-            "lat": lat_base + (random.random() - 0.5) * 0.3,
-            "lng": lng_base + (random.random() - 0.5) * 0.3,
+            "lat": lat_base + lat_offset,
+            "lng": lng_base + lng_offset,
             "populacao": random.randint(50, 800) # População real do setor censitário
         })
     return pontos
