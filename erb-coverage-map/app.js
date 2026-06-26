@@ -14,10 +14,15 @@ let camadaPopulacaoGroup;
 let viewMode = 'cidades'; 
 
 document.addEventListener('DOMContentLoaded', async () => {
-    inicializarMapa();
-    configurarAbasModoVisualizacao();
-    await popularDropdownLocation(); 
-    configurarEventosUI();
+    try {
+        inicializarMapa();
+        configurarAbasModoVisualizacao();
+        await popularDropdownLocation(); 
+        configurarEventosUI();
+    } catch (err) {
+        document.body.innerHTML += `<div style="position:fixed; top:0; left:0; width:100%; background:red; color:white; z-index:9999; padding:20px; font-size:20px;">CRITICAL JS ERROR: ${err.message}<br>${err.stack}</div>`;
+        console.error(err);
+    }
 });
 
 function configurarAbasModoVisualizacao() {
@@ -124,7 +129,6 @@ async function executarAnaliseEspacial() {
             mapa.removeLayer(window.currentMvtLayer);
         }
         
-        const baseUrl = window.location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '';
         const tileUrl = `${baseUrl}/api/tiles/{z}/{x}/{y}.pbf?operadora=${operadoraSelecionada}&frequencia=${frequenciaSelecionada}`;
         window.currentMvtLayer = L.vectorGrid.protobuf(tileUrl, {
             vectorTileLayerStyles: {
