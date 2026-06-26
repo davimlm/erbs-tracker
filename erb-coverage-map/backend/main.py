@@ -42,6 +42,8 @@ CONFIG_PROPAGACAO = {
     '3500': 300
 }
 
+from typing import Optional
+
 class CoverageRequest(BaseModel):
     locationId: str
     viewMode: str
@@ -49,23 +51,19 @@ class CoverageRequest(BaseModel):
     frequencia: str
     mostrarPopulacao: bool
     mostrarVegetacao: bool = False
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 @app.get("/api/tiles/{z}/{x}/{y}.pbf")
 async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequencia: str = 'all'):
     raio_metros = CONFIG_PROPAGACAO.get(frequencia, 1200)
     
-    # Query otimizada para Vector Tiles via PostGIS
+    # Query otimizada para Vector Tiles via PostGIS usando EXISTS
     query = """
     WITH 
     bounds AS (
         SELECT ST_Transform(ST_TileEnvelope($1, $2, $3), 4326) AS geom,
                ST_TileEnvelope($1, $2, $3) AS geom_3857
-    ),
-    cobertura AS (
-        SELECT ST_Union(ST_Buffer(geometry::geography, $4)::geometry) AS uniao
-        FROM erbs_ativas
-        WHERE ($5 = 'all' OR operadora = $5) 
-          AND ($6 = 'all' OR frequencia = $6)
     ),
     celulas_sombra AS (
         SELECT h.h3_index, h.populacao_estimada, h.percent_vegetacao, h.geometry AS geom_4326
@@ -78,10 +76,12 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
             c.populacao_estimada,
             c.percent_vegetacao,
             c.geom_4326,
-            CASE 
-                WHEN (SELECT uniao FROM cobertura) IS NULL THEN TRUE
-                ELSE NOT ST_Intersects(c.geom_4326, (SELECT uniao FROM cobertura))
-            END as na_sombra
+            NOT EXISTS (
+                SELECT 1 FROM erbs_ativas e
+                WHERE ($5 = 'all' OR e.operadora = $5) 
+                  AND ($6 = 'all' OR e.frequencia = $6)
+                  AND ST_DWithin(c.geom_4326, e.geometry, $4 / 111320.0)
+            ) as na_sombra
         FROM celulas_sombra c
     ),
     mvtgeom AS (
@@ -107,40 +107,53 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
 async def analyze_coverage(req: CoverageRequest):
     raio_metros = CONFIG_PROPAGACAO.get(req.frequencia, 1200)
     
-    # Obter ERBs para retornar ao front (ainda enviaremos via JSON os pontos das antenas para desenhar os marcadores)
+    r_deg = 0.5
+    if req.viewMode == 'estados': r_deg = 3.0
+    if req.viewMode == 'regioes': r_deg = 8.0
+    
     query_erbs = """
         SELECT id, ST_Y(geometry) as lat, ST_X(geometry) as lng, operadora, frequencia
         FROM erbs_ativas
         WHERE ($1 = 'all' OR operadora = $1) 
           AND ($2 = 'all' OR frequencia = $2)
+          AND ($3::float IS NULL OR ST_DWithin(geometry, ST_MakePoint($4, $3), $5))
     """
     
-    # Obter métricas globais para a UI (Soma total)
     query_stats = """
-        WITH cobertura AS (
-            SELECT ST_Union(ST_Buffer(geometry::geography, $1)::geometry) AS uniao
-            FROM erbs_ativas
-            WHERE ($2 = 'all' OR operadora = $2) 
-              AND ($3 = 'all' OR frequencia = $3)
+        WITH bounding_box AS (
+            SELECT ST_MakeEnvelope($4 - $5, $3 - $5, $4 + $5, $3 + $5, 4326) AS bbox
+        ),
+        grid_filtrado AS (
+            SELECT populacao_estimada, geometry as geom, ST_Area(geometry::geography) as area_geog
+            FROM h3_grid_precalc
+            WHERE ($3::float IS NULL OR ST_Intersects(geometry, (SELECT bbox FROM bounding_box)))
         )
         SELECT 
             COALESCE(SUM(populacao_estimada), 0) as pop_total,
             COALESCE(SUM(CASE 
-                WHEN (SELECT uniao FROM cobertura) IS NULL THEN populacao_estimada 
-                ELSE (CASE WHEN NOT ST_Intersects(geometry, (SELECT uniao FROM cobertura)) THEN populacao_estimada ELSE 0 END) 
-            END), 0) as pop_sombra,
+                WHEN NOT EXISTS (
+                    SELECT 1 FROM erbs_ativas e 
+                    WHERE ($2 = 'all' OR e.operadora = $2) 
+                      AND ($6 = 'all' OR e.frequencia = $6)
+                      AND ST_DWithin(g.geom, e.geometry, $1 / 111320.0)
+                ) THEN populacao_estimada ELSE 0 END
+            ), 0) as pop_sombra,
             
-            COALESCE(SUM(ST_Area(geometry::geography)), 0) / 1000000.0 as area_total_km2,
+            COALESCE(SUM(area_geog), 0) / 1000000.0 as area_total_km2,
             COALESCE(SUM(CASE 
-                WHEN (SELECT uniao FROM cobertura) IS NULL THEN ST_Area(geometry::geography) 
-                ELSE (CASE WHEN NOT ST_Intersects(geometry, (SELECT uniao FROM cobertura)) THEN ST_Area(geometry::geography) ELSE 0 END) 
-            END), 0) / 1000000.0 as area_sombra_km2
-        FROM h3_grid_precalc;
+                WHEN NOT EXISTS (
+                    SELECT 1 FROM erbs_ativas e 
+                    WHERE ($2 = 'all' OR e.operadora = $2) 
+                      AND ($6 = 'all' OR e.frequencia = $6)
+                      AND ST_DWithin(g.geom, e.geometry, $1 / 111320.0)
+                ) THEN area_geog ELSE 0 END
+            ), 0) / 1000000.0 as area_sombra_km2
+        FROM grid_filtrado g;
     """
     
     async with db_pool.acquire() as conn:
-        erbs_records = await conn.fetch(query_erbs, req.operadora, req.frequencia)
-        stats = await conn.fetchrow(query_stats, raio_metros, req.operadora, req.frequencia)
+        erbs_records = await conn.fetch(query_erbs, req.operadora, req.frequencia, req.lat, req.lng, r_deg)
+        stats = await conn.fetchrow(query_stats, raio_metros, req.operadora, req.lat, req.lng, r_deg, req.frequencia)
         
     erbs_ativas = [{"id": r["id"], "lat": r["lat"], "lng": r["lng"], "operadora": r["operadora"], "frequencia": r["frequencia"]} for r in erbs_records]
     

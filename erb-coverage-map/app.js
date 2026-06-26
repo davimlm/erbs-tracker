@@ -143,7 +143,9 @@ async function executarAnaliseEspacial() {
                 operadora: operadoraSelecionada,
                 frequencia: frequenciaSelecionada,
                 mostrarPopulacao: mostrarPopulacao,
-                mostrarVegetacao: mostrarVegetacao
+                mostrarVegetacao: mostrarVegetacao,
+                lat: configLocal ? configLocal.lat : null,
+                lng: configLocal ? configLocal.lng : null
             })
         });
 
