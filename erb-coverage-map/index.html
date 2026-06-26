@@ -63,6 +63,16 @@
                     </div>
                 </label>
             </div>
+            
+            <div class="control-group toggle-group" style="margin-top: 10px;">
+                <label for="veg-toggle" class="toggle-label" style="color: #30d158;">
+                    Mostrar Área Verde (Vegetativa)
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="veg-toggle">
+                        <span class="slider round"></span>
+                    </div>
+                </label>
+            </div>
         </div>
 
         <div class="control-group">
@@ -116,6 +126,18 @@
                 <span>Pop. em Área de Sombra:</span>
                 <span id="stat-shadow-pop" class="stat-value shadow-alert">0 hab.</span>
             </div>
+            <div class="stat-row" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+                <span>Área Sombra Total:</span>
+                <span id="stat-shadow-area" class="stat-value">0 km² (0%)</span>
+            </div>
+            <div class="stat-row">
+                <span>Sombra Habitada (Impacto):</span>
+                <span id="stat-shadow-area-hab" class="stat-value shadow-alert">0 km²</span>
+            </div>
+            <div class="stat-row">
+                <span>Sombra Vegetativa (Isolada):</span>
+                <span id="stat-shadow-area-veg" class="stat-value" style="color: #30d158;">0 km²</span>
+            </div>
             <div class="progress-bar-container">
                 <div id="shadow-progress" class="progress-bar"></div>
             </div>
@@ -127,11 +149,6 @@
                 <span>Fonte Anatel / Mosaico:</span>
                 <span class="stat-value" style="color: #0a84ff;">Base Atualizada</span>
             </div>
-            <div class="stat-row">
-                <span>Status da Rede (Downdetector):</span>
-                <span id="veracity-downdetector" class="stat-value success-text">Estável</span>
-            </div>
-            <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 8px; line-height: 1.4;">* Cruzamento em tempo real simulando APIs do Downdetector para ocorrências de falhas e bases da Teleco para densidade.</p>
         </div>
     </div>
 
@@ -153,7 +170,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     
     <script charset="utf-8" src="data/config.js?v=12"></script>
     <script src="app.js?v=12"></script>

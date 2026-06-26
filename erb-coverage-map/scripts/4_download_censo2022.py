@@ -38,7 +38,8 @@ def processar_populacao_real():
         
         dados_exportacao = gerar_mock_centroides_ibge(cidade)
         
-        caminho_arquivo = f'../data/populacao_real_{cidade}.json'
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+        caminho_arquivo = os.path.join(data_dir, f'populacao_real_{cidade}.json')
         with open(caminho_arquivo, 'w', encoding='utf-8') as f:
             json.dump(dados_exportacao, f, ensure_ascii=False, indent=2)
             
@@ -60,8 +61,8 @@ def gerar_mock_centroides_ibge(cidade):
     for i in range(num_setores):
         pontos.append({
             "id_setor": f"setor_{i}",
-            "lat": lat_base + (random.random() - 0.5) * 0.04,
-            "lng": lng_base + (random.random() - 0.5) * 0.04,
+            "lat": lat_base + (random.random() - 0.5) * 0.3,
+            "lng": lng_base + (random.random() - 0.5) * 0.3,
             "populacao": random.randint(50, 800) # População real do setor censitário
         })
     return pontos

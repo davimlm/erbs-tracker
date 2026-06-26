@@ -1,49 +1,22 @@
 // Configurações de propagação teórica por frequência (ambiente urbano denso)
 const CONFIG_PROPAGACAO = {
-    'all': { raioMetros: 1200, corCobertura: '#8e8e93' },  // Redes combinadas (usa raio max 700MHz)
-    '700': { raioMetros: 1200, corCobertura: '#30d158' },  // Alto alcance/penetração
-    '2600': { raioMetros: 600, corCobertura: '#0a84ff' },  // Médio alcance
-    '3500': { raioMetros: 300, corCobertura: '#bf5af2' }   // Curto alcance (5G Puro)
+    'all': { raioMetros: 1200, corCobertura: '#8e8e93' },  
+    '700': { raioMetros: 1200, corCobertura: '#30d158' },  
+    '2600': { raioMetros: 600, corCobertura: '#0a84ff' },  
+    '3500': { raioMetros: 300, corCobertura: '#bf5af2' }   
 };
 
 // Inicialização do Estado da Aplicação
 let mapa;
 let camadaEstudoGroup;
 let camadaDadosGroup;
-let camadaPopulacaoGroup; // Nova camada para os pontos reais do IBGE
-let basePointsERB = []; // Armazena a infraestrutura fixa para evitar mutações de posição
-let dadosPopulacaoIBGE = []; // Armazena os dados reais em memória
-// CONFIG_CIDADES_GERADO já vêm carregados via tag <script> no HTML (config.js)
-let erbsDataCache = {}; // Cache de macrorregiões
-let malhasIbgeCache = {}; // Cache de contornos IBGE
-let malhaPoligonoAtual = null; // Guarda o GeoJSON da malha atual
-
-let viewMode = 'cidades'; // 'cidades', 'estados', 'regioes'
-
-// Função para buscar o JSON gerado pelo Python
-async function carregarDadosIBGE(cidadeId) {
-    if (viewMode !== 'cidades') return;
-    
-    // Normaliza o nome da cidade para bater com o arquivo python gerado
-    const normalizeId = cidadeId.replace('_sp', '').replace('_rj', '').replace('_mg', '').replace('_df', '');
-    try {
-        const response = await fetch(`data/populacao_real_${normalizeId}.json`);
-        if (response.ok) {
-            dadosPopulacaoIBGE = await response.json();
-        } else {
-            console.warn("Sem dados do censo para", cidadeId);
-            dadosPopulacaoIBGE = [];
-        }
-    } catch (error) {
-        console.error("Erro ao carregar dados populacionais do IBGE:", error);
-        dadosPopulacaoIBGE = [];
-    }
-}
+let camadaPopulacaoGroup; 
+let viewMode = 'cidades'; 
 
 document.addEventListener('DOMContentLoaded', async () => {
     inicializarMapa();
     configurarAbasModoVisualizacao();
-    await popularDropdownLocation(); // Popula o dropdown e engatilha mudarCidade()
+    await popularDropdownLocation(); 
     configurarEventosUI();
 });
 
@@ -72,16 +45,14 @@ async function popularDropdownLocation() {
     const locations = Object.entries(configData);
     if (locations.length === 0) return;
     
-    let defaultId = locations[0][0];
-    
-    for (const [id, config] of locations) {
+    locations.forEach(([id, data]) => {
         const option = document.createElement('option');
-        option.value = config.nome;
+        option.value = data.nome;
         option.dataset.id = id;
         cityDatalist.appendChild(option);
-    }
+    });
     
-    // Força selecao da capital SP caso exista na lista de cidades
+    let defaultId = locations[0][0];
     if (viewMode === 'cidades' && configData['sao_paulo_sp']) {
         defaultId = 'sao_paulo_sp';
     }
@@ -93,271 +64,180 @@ async function popularDropdownLocation() {
 
 function inicializarMapa() {
     mapa = L.map('map', {
-        center: [-15.7801, -47.9292], // Brasília as default initial center
+        center: [-15.7801, -47.9292], 
         zoom: 14,
         zoomControl: false
     });
 
-    L.control.zoom({
-        position: 'topright'
-    }).addTo(mapa);
+    L.control.zoom({ position: 'topright' }).addTo(mapa);
 
-    // Substituição do mapa base clássico por CartoDB Dark Matter (Essencial para destacar o mapa de calor/vetores)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
         subdomains: 'abcd',
         maxZoom: 20
     }).addTo(mapa);
 
     camadaEstudoGroup = L.layerGroup().addTo(mapa);
     camadaDadosGroup = L.layerGroup().addTo(mapa);
-    camadaPopulacaoGroup = L.layerGroup().addTo(mapa); // Camada sobreposta
+    camadaPopulacaoGroup = L.layerGroup().addTo(mapa);
 }
 
-// Carrega a base de ERBs para a região selecionada (Cidade, Estado ou Região)
-function gerarMalhaInfraestrutura(locationId, erbsDataLocal) {
-    basePointsERB = []; // Limpa a base
-    
-    if (!erbsDataLocal) erbsDataLocal = {};
-    
-    if (viewMode === 'cidades') {
-        if (erbsDataLocal[locationId]) {
-            basePointsERB = erbsDataLocal[locationId];
-        }
-    } else if (viewMode === 'estados') {
-        // locationId é a UF (ex: 'SP')
-        for (const [cid, erbsArray] of Object.entries(erbsDataLocal)) {
-            if (erbsArray.length > 0 && erbsArray[0].uf === locationId) {
-                basePointsERB = basePointsERB.concat(erbsArray);
-            }
-        }
-    } else if (viewMode === 'regioes') {
-        // locationId é a Regiao (ex: 'Sudeste')
-        // O erbsDataLocal inteiro já é filtrado pela macrorregião selecionada
-        for (const [cid, erbsArray] of Object.entries(erbsDataLocal)) {
-            basePointsERB = basePointsERB.concat(erbsArray);
-        }
-    }
-}
-
-function executarAnaliseEspacial() {
+async function executarAnaliseEspacial() {
     const spinner = document.getElementById('loading-spinner');
     if (spinner) spinner.style.display = 'flex';
     
-    // Yield execution so the browser can paint the spinner
-    setTimeout(() => {
-        _executarAnaliseEspacialInterno();
-        if (spinner) spinner.style.display = 'none';
-    }, 50);
-}
-
-function _executarAnaliseEspacialInterno() {
-    // Limpar camadas anteriores
     camadaEstudoGroup.clearLayers();
     camadaDadosGroup.clearLayers();
     camadaPopulacaoGroup.clearLayers();
 
-    // 1. Obter parâmetros da UI
     const operadoraSelecionada = document.getElementById('operator-select').value;
     const frequenciaSelecionada = document.querySelector('input[name="frequency"]:checked').value;
-    const configFrequencia = CONFIG_PROPAGACAO[frequenciaSelecionada];
-    const raioMetros = configFrequencia.raioMetros;
+    const popToggleEl = document.getElementById('pop-toggle');
+    const mostrarPopulacao = popToggleEl ? popToggleEl.checked : false;
+    
+    const vegToggleEl = document.getElementById('veg-toggle');
+    const mostrarVegetacao = vegToggleEl ? vegToggleEl.checked : false;
 
-    // 2. Filtrar e Processar ERBs Ativas
-    const erbsAtivas = basePointsERB.filter(erb => {
-        const matchOp = operadoraSelecionada === 'all' || erb.operadora === operadoraSelecionada;
-        const matchFreq = frequenciaSelecionada === 'all' || (erb.frequencias && erb.frequencias.includes(frequenciaSelecionada));
-        return matchOp && matchFreq;
-    });
-
-    // 3. Definir Polígono da Área de Estudo
     const locationId = document.getElementById('search-input').dataset.currentId;
-    let configLocal;
-    if (viewMode === 'cidades') configLocal = CONFIG_CIDADES_GERADO[locationId];
-    else if (viewMode === 'estados') configLocal = CONFIG_ESTADOS_GERADO[locationId];
-    else if (viewMode === 'regioes') configLocal = CONFIG_REGIOES_GERADO[locationId];
-    
-    let poligonoEstudo;
 
-    if (malhaPoligonoAtual) {
-        // Usa o geojson exato baixado do IBGE
-        // A API do IBGE retorna um FeatureCollection, o turf.difference precisa da geometria (Polygon/MultiPolygon)
-        poligonoEstudo = malhaPoligonoAtual.features[0];
-        
-        L.geoJSON(malhaPoligonoAtual, {
-            style: { color: '#ffffff', weight: 2, dashArray: '4, 4', fillOpacity: 0.05 }
-        }).addTo(camadaEstudoGroup);
-    } else {
-        // Fallback: calcula bounding box
-        if (viewMode === 'cidades' && erbsAtivas.length > 0) {
-            const margemKm = (raioMetros / 1000) + 0.5;
-            if (erbsAtivas.length === 1) {
-                const pt = turf.point([erbsAtivas[0].lng, erbsAtivas[0].lat]);
-                const bboxEstudo = turf.bbox(turf.circle(pt, margemKm, {units: 'kilometers'}));
-                poligonoEstudo = turf.bboxPolygon(bboxEstudo);
-            } else {
-                const pts = erbsAtivas.map(erb => turf.point([erb.lng, erb.lat]));
-                const fc = turf.featureCollection(pts);
-                const envelop = turf.envelope(fc);
-                const bboxBuffer = turf.buffer(envelop, margemKm, {units: 'kilometers'});
-                poligonoEstudo = turf.bboxPolygon(turf.bbox(bboxBuffer));
-            }
-        } else {
-            const centroDireto = [configLocal.lng, configLocal.lat];
-            let bboxSizeKm = 2.2;
-            if (viewMode === 'estados') bboxSizeKm = 200;
-            if (viewMode === 'regioes') bboxSizeKm = 800;
-            const bboxEstudo = turf.bbox(turf.circle(centroDireto, bboxSizeKm, {units: 'kilometers'}));
-            poligonoEstudo = turf.bboxPolygon(bboxEstudo);
-        }
-
-        if (viewMode === 'cidades') {
-            L.geoJSON(poligonoEstudo, {
-                style: { color: '#ffffff', weight: 1, dashArray: '5, 5', fillOpacity: 0 }
-            }).addTo(camadaEstudoGroup);
-        }
-    }
-
-    let buffersCobertura = [];
-    const colorCoverage = frequenciaSelecionada === '700' ? '#0a84ff' : 
-                          frequenciaSelecionada === '2600' ? '#ff9f0a' : '#bf5af2';
-
-    // Para qualquer volume, desenhamos os círculos normais das antenas com Leaflet nativo
-    erbsAtivas.forEach(erb => {
-        L.circle([erb.lat, erb.lng], {
-            color: colorCoverage,
-            fillColor: colorCoverage,
-            fillOpacity: 0.1,
-            radius: raioMetros,
-            weight: 1
-        }).addTo(camadaEstudoGroup);
-
-        // Marcadores físicos (pontos brancos) apenas se for visão Cidade, senão o mapa fica poluído
-        if (viewMode === 'cidades') {
-            L.circleMarker([erb.lat, erb.lng], {
-                radius: 4,
-                fillColor: '#ffffff',
-                color: '#000000',
-                weight: 1,
-                fillOpacity: 1
-            }).bindPopup(`<b>Operadora:</b> ${erb.operadora.toUpperCase()}`).addTo(camadaDadosGroup);
-        }
-    });
-
-    let poligonoZonaSombra = null;
-
-    // Trava de segurança para Turf.js aumentada graças à otimização O(N log N)
-    const LIMIT_TURF = 10000;
-    
-    // Função recursiva para União rápida de polígonos (Divide and Conquer)
-    function fastUnion(polygons) {
-        if (!polygons || polygons.length === 0) return null;
-        if (polygons.length === 1) return polygons[0];
-        const half = Math.floor(polygons.length / 2);
-        const left = fastUnion(polygons.slice(0, half));
-        const right = fastUnion(polygons.slice(half));
-        try {
-            return turf.union(left, right);
-        } catch(e) {
-            // Em caso de erro topológico no turf, retorna um dos lados para não quebrar tudo
-            return left;
-        }
-    }
-
-    let uniaoCobertura = null;
-
-    if (erbsAtivas.length <= LIMIT_TURF) {
-        erbsAtivas.forEach(erb => {
-            const pt = turf.point([erb.lng, erb.lat]);
-            const buffered = turf.buffer(pt, raioMetros, {units: 'meters'});
-            buffersCobertura.push(buffered);
+    try {
+        const response = await fetch('/api/coverage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                locationId: locationId,
+                viewMode: viewMode,
+                operadora: operadoraSelecionada,
+                frequencia: frequenciaSelecionada,
+                mostrarPopulacao: mostrarPopulacao,
+                mostrarVegetacao: mostrarVegetacao
+            })
         });
 
-        if (buffersCobertura.length > 0) {
-            uniaoCobertura = fastUnion(buffersCobertura);
-
-            // Renderiza a Zona de Sombra
-            try {
-                poligonoZonaSombra = turf.difference(poligonoEstudo, uniaoCobertura);
-            } catch (e) {
-                console.error("Erro no turf.difference, pulando sombra: ", e);
-                poligonoZonaSombra = null;
-            }
-        } else {
-            poligonoZonaSombra = poligonoEstudo;
-        }
-
-        if (poligonoZonaSombra) {
-            L.geoJSON(poligonoZonaSombra, {
+        if (!response.ok) throw new Error("Erro na API de cobertura");
+        
+        const data = await response.json();
+        
+        // Renderizar Sombra
+        if (data.poligonoSombra) {
+            const estudoLayer = L.geoJSON(data.poligonoSombra, {
                 style: {
-                    color: 'transparent',
+                    color: '#ffffff',
+                    weight: 1,
+                    dashArray: '5, 5',
                     fillColor: '#ff3b30',
-                    fillOpacity: 0.35 // Vermelho indicando buraco de sombra
+                    fillOpacity: 0.35
+                }
+            }).addTo(camadaEstudoGroup);
+
+            // Adaptar escala do mapa dinamicamente
+            if (estudoLayer.getBounds().isValid()) {
+                mapa.fitBounds(estudoLayer.getBounds(), { 
+                    padding: [20, 20],
+                    maxZoom: 12
+                });
+            }
+        }
+        
+        // Renderizar Sombra Vegetativa (Área Verde)
+        if (mostrarVegetacao && data.poligonoVegetativo) {
+            L.geoJSON(data.poligonoVegetativo, {
+                style: {
+                    color: '#30d158',
+                    weight: 0,
+                    fillColor: '#30d158',
+                    fillOpacity: 0.35
                 }
             }).addTo(camadaEstudoGroup);
         }
-    } else if (erbsAtivas.length > LIMIT_TURF) {
-        console.warn(`[Segurança] ${erbsAtivas.length} antenas na tela. O cálculo matemático de sombra (Turf.js) foi desligado.`);
-    }
 
-    // ==========================================
-    // NOVO: Cálculo Cirúrgico de População Real
-    // ==========================================
-    const popToggleEl = document.getElementById('pop-toggle');
-    const mostrarPopulacao = popToggleEl ? popToggleEl.checked : false;
+        // Renderizar ERBs
+        const configFrequencia = CONFIG_PROPAGACAO[frequenciaSelecionada];
+        const raioMetros = configFrequencia.raioMetros;
+        const colorCoverage = frequenciaSelecionada === '700' ? '#0a84ff' : 
+                              frequenciaSelecionada === '2600' ? '#ff9f0a' : '#bf5af2';
 
-    let populacaoTotal = 0;
-    let populacaoSombra = 0;
+        data.erbsAtivas.forEach(erb => {
+            L.circle([erb.lat, erb.lng], {
+                color: colorCoverage,
+                fillColor: colorCoverage,
+                fillOpacity: 0.1,
+                radius: raioMetros,
+                weight: 1
+            }).addTo(camadaEstudoGroup);
 
-    if (viewMode === 'cidades') {
-        // Iterar sobre os milhares de centróides reais do IBGE
-        dadosPopulacaoIBGE.forEach(setor => {
-            populacaoTotal += setor.populacao;
-            
-            const pt = turf.point([setor.lng, setor.lat]);
-            let estaNaSombra = true;
-
-            if (uniaoCobertura) {
-                // Se o ponto estiver dentro da união das coberturas, ele NÃO está na sombra
-                estaNaSombra = !turf.booleanPointInPolygon(pt, uniaoCobertura);
+            if (viewMode === 'cidades') {
+                L.circleMarker([erb.lat, erb.lng], {
+                    radius: 4,
+                    fillColor: '#ffffff',
+                    color: '#000000',
+                    weight: 1,
+                    fillOpacity: 1
+                }).bindPopup(`<b>Operadora:</b> ${(erb.operadora || 'Desconhecida').toUpperCase()}`).addTo(camadaDadosGroup);
             }
+        });
 
-            if (estaNaSombra) {
-                populacaoSombra += setor.populacao;
-            }
-
-            // Renderiza no mapa como um heatmap sutil (apenas se o toggle estiver ativo)
-            if (mostrarPopulacao) {
-                const corPonto = estaNaSombra ? '#ff453a' : '#86868b'; // Vermelho se gargalo, cinza se coberto
-                L.circleMarker([setor.lat, setor.lng], {
-                    radius: 2, // Reduzido para não poluir
+        // Renderizar População (Heatmap)
+        if (mostrarPopulacao && data.populacao_pontos) {
+            data.populacao_pontos.forEach(p => {
+                const corPonto = p.na_sombra ? '#ff453a' : '#86868b';
+                L.circleMarker([p.lat, p.lng], {
+                    radius: 2,
                     fillColor: corPonto,
                     color: corPonto,
                     weight: 0,
-                    fillOpacity: estaNaSombra ? 1 : 0.4 // Destaca as áreas críticas
+                    fillOpacity: p.na_sombra ? 1 : 0.4
                 }).addTo(camadaPopulacaoGroup);
+            });
+        }
+
+        // Atualizar Métricas
+        const percentSombraCalculado = data.popTotal > 0 ? ((data.popSombra / data.popTotal) * 100) : 0;
+        const percentualSombra = viewMode === 'cidades' && data.popTotal > 0 ? percentSombraCalculado.toFixed(1) : 'N/A';
+
+        document.getElementById('stat-erb-count').innerText = data.erbsAtivas.length.toLocaleString('pt-BR');
+        document.getElementById('stat-total-pop').innerText = viewMode === 'cidades' ? data.popTotal.toLocaleString('pt-BR') + ' hab.' : '--';
+        document.getElementById('stat-shadow-pop').innerText = viewMode === 'cidades' ? `${data.popSombra.toLocaleString('pt-BR')} hab. (${percentualSombra}%)` : '--';
+        
+        if (viewMode === 'cidades' && data.areaTotalKm2 > 0) {
+            document.getElementById('stat-shadow-area').innerText = `${data.areaSombraKm2.toFixed(1)} km² (${data.areaSombraPercent.toFixed(1)}%)`;
+            
+            if (data.areaSombraHabitadaKm2 > 0 || data.areaSombraVegetativaKm2 > 0) {
+                document.getElementById('stat-shadow-area-hab').innerText = `${data.areaSombraHabitadaKm2.toFixed(1)} km²`;
+                document.getElementById('stat-shadow-area-veg').innerText = `${data.areaSombraVegetativaKm2.toFixed(1)} km²`;
+            } else {
+                document.getElementById('stat-shadow-area-hab').innerText = `N/D`;
+                document.getElementById('stat-shadow-area-veg').innerText = `N/D`;
             }
-        });
-    }
-
-    // 6. Atualização de Métricas Exatas
-    const percentSombraCalculado = populacaoTotal > 0 ? ((populacaoSombra / populacaoTotal) * 100) : 0;
-    const percentualSombra = viewMode === 'cidades' && populacaoTotal > 0 ? percentSombraCalculado.toFixed(1) : 'N/A';
-
-    document.getElementById('stat-erb-count').innerText = erbsAtivas.length.toLocaleString('pt-BR');
-    document.getElementById('stat-total-pop').innerText = viewMode === 'cidades' ? populacaoTotal.toLocaleString('pt-BR') + ' hab.' : '--';
-    document.getElementById('stat-shadow-pop').innerText = viewMode === 'cidades' ? `${populacaoSombra.toLocaleString('pt-BR')} hab. (${percentualSombra}%)` : '--';
-    
-    const shadowProgressEl = document.getElementById('shadow-progress');
-    if (shadowProgressEl) {
-        shadowProgressEl.style.width = viewMode === 'cidades' ? `${percentualSombra}%` : '0%';
+        } else if (viewMode === 'estados' || viewMode === 'regioes') {
+            if (data.areaTotalKm2 > 0) {
+                document.getElementById('stat-shadow-area').innerText = `${data.areaSombraKm2.toFixed(1)} km² (${data.areaSombraPercent.toFixed(1)}%)`;
+            } else {
+                document.getElementById('stat-shadow-area').innerText = '--';
+            }
+            document.getElementById('stat-shadow-area-hab').innerText = '--';
+            document.getElementById('stat-shadow-area-veg').innerText = '--';
+        } else {
+            document.getElementById('stat-shadow-area').innerText = '--';
+            document.getElementById('stat-shadow-area-hab').innerText = '--';
+            document.getElementById('stat-shadow-area-veg').innerText = '--';
+        }
+        
+        const shadowProgressEl = document.getElementById('shadow-progress');
+        if (shadowProgressEl) {
+            shadowProgressEl.style.width = viewMode === 'cidades' ? `${percentualSombra}%` : '0%';
+        }
+        
+    } catch (e) {
+        console.error("Erro na chamada de API:", e);
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
 function configurarEventosUI() {
     document.getElementById('operator-select').addEventListener('change', () => {
         executarAnaliseEspacial();
-        atualizarVeracidade();
     });
     
     const radioButtons = document.querySelectorAll('input[name="frequency"]');
@@ -367,27 +247,20 @@ function configurarEventosUI() {
 
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
-        // Quando o usuário interagir e selecionar algo no datalist
         searchInput.addEventListener('change', (e) => {
-            const val = e.target.value.toLowerCase().trim();
-            if (!val) return; // Ignore clear
+            const normalizeText = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            const val = normalizeText(e.target.value).trim();
+            if (!val) return; 
             
             const options = document.querySelectorAll('#city-datalist option');
             let match = null;
             
-            // 1. Tenta correspondência exata
             for (const option of options) {
-                if (option.value.toLowerCase() === val) {
-                    match = option; break;
-                }
+                if (normalizeText(option.value) === val) { match = option; break; }
             }
-            
-            // 2. Tenta correspondência parcial (ex: ignorando acentos ou final)
             if (!match) {
                 for (const option of options) {
-                    if (option.value.toLowerCase().includes(val)) {
-                        match = option; break;
-                    }
+                    if (normalizeText(option.value).includes(val)) { match = option; break; }
                 }
             }
             
@@ -398,7 +271,6 @@ function configurarEventosUI() {
                     mudarCidade(match.dataset.id);
                 }
             } else {
-                // Reverte para o nome atual se não encontrou nada
                 let configLocal;
                 const cid = searchInput.dataset.currentId;
                 if (viewMode === 'cidades') configLocal = CONFIG_CIDADES_GERADO[cid];
@@ -408,12 +280,7 @@ function configurarEventosUI() {
             }
         });
         
-        // Limpar ao clicar
-        searchInput.addEventListener('focus', (e) => {
-            e.target.value = '';
-        });
-        
-        // Se sair do campo sem escolher, volta pro valor salvo
+        searchInput.addEventListener('focus', (e) => { e.target.value = ''; });
         searchInput.addEventListener('blur', (e) => {
             if (e.target.value.trim() === '') {
                 const cid = searchInput.dataset.currentId;
@@ -430,17 +297,18 @@ function configurarEventosUI() {
     if (popToggleEl) {
         popToggleEl.addEventListener('change', executarAnaliseEspacial);
     }
+    
+    const vegToggleEl = document.getElementById('veg-toggle');
+    if (vegToggleEl) {
+        vegToggleEl.addEventListener('change', executarAnaliseEspacial);
+    }
 
     const modal = document.getElementById('modal-metodologia');
     const btnMetodologia = document.getElementById('btn-metodologia');
     const btnCloseModal = document.getElementById('btn-close-modal');
     if (modal && btnMetodologia && btnCloseModal) {
-        btnMetodologia.addEventListener('click', () => {
-            modal.classList.remove('hidden');
-        });
-        btnCloseModal.addEventListener('click', () => {
-            modal.classList.add('hidden');
-        });
+        btnMetodologia.addEventListener('click', () => { modal.classList.remove('hidden'); });
+        btnCloseModal.addEventListener('click', () => { modal.classList.add('hidden'); });
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.classList.add('hidden');
         });
@@ -455,91 +323,9 @@ async function mudarCidade(explicitLocationId = null) {
     else if (viewMode === 'estados') config = CONFIG_ESTADOS_GERADO[locationId];
     else if (viewMode === 'regioes') config = CONFIG_REGIOES_GERADO[locationId];
     
-    let erbsDataLocal = null;
-    const regiaoNome = config.regiao || 'Centro-Oeste'; 
-    const reg_filename = `erbs_${regiaoNome.replace(' ', '')}.json`;
-    if (erbsDataCache[regiaoNome]) {
-        erbsDataLocal = erbsDataCache[regiaoNome];
-    } else {
-        try {
-            const response = await fetch(`data/${reg_filename}`);
-            erbsDataLocal = await response.json();
-            erbsDataCache[regiaoNome] = erbsDataLocal;
-        } catch (error) {
-            console.error("Erro carregando ERBs da regiao", regiaoNome, error);
-        }
-    }
-    
-    // Download da Malha do IBGE (se existir código)
-    malhaPoligonoAtual = null;
-    if (config.ibge_code) {
-        let nivelIbge = 'municipios';
-        if (viewMode === 'estados') nivelIbge = 'estados';
-        if (viewMode === 'regioes') nivelIbge = 'regioes';
-        
-        const cacheKey = `${nivelIbge}_${config.ibge_code}`;
-        if (malhasIbgeCache[cacheKey]) {
-            malhaPoligonoAtual = malhasIbgeCache[cacheKey];
-        } else {
-            document.getElementById('loading-overlay').style.display = 'flex';
-            document.querySelector('#loading-overlay p').innerText = 'Baixando malha do IBGE...';
-            try {
-                const res = await fetch(`https://servicodados.ibge.gov.br/api/v3/malhas/${nivelIbge}/${config.ibge_code}?formato=application/vnd.geo+json`);
-                if (res.ok) {
-                    const geojson = await res.json();
-                    malhasIbgeCache[cacheKey] = geojson;
-                    malhaPoligonoAtual = geojson;
-                }
-            } catch (e) {
-                console.error("Erro ao buscar malha IBGE:", e);
-            }
-            document.getElementById('loading-overlay').style.display = 'none';
-        }
-    }
+    // O zoom é agora ajustado dinamicamente pelo fitBounds
+    // mapa.flyTo([config.lat, config.lng], zoomLevel, { duration: 1.5 });
 
-    gerarMalhaInfraestrutura(locationId, erbsDataLocal);
-    
-    if (malhaPoligonoAtual) {
-        try {
-            const bbox = turf.bbox(malhaPoligonoAtual);
-            mapa.flyToBounds([[bbox[1], bbox[0]], [bbox[3], bbox[2]]], { duration: 1.5, padding: [20, 20] });
-        } catch (e) {
-            console.error("Erro ao calcular bbox com turf:", e);
-        }
-    } else {
-        let zoomLevel = 14;
-        if (viewMode === 'estados') zoomLevel = 6;
-        if (viewMode === 'regioes') zoomLevel = 5;
-        mapa.flyTo([config.lat, config.lng], zoomLevel, { duration: 1.5 });
-    }
-
-    // Carrega a base real antes de calcular a análise
-    await carregarDadosIBGE(locationId);
-
-    executarAnaliseEspacial();
-    atualizarVeracidade();
+    await executarAnaliseEspacial();
 }
 
-function atualizarVeracidade() {
-    const operadora = document.getElementById('operator-select').value;
-    const ddElement = document.getElementById('veracity-downdetector');
-    const telecoElement = document.getElementById('veracity-teleco');
-    
-    if (operadora === 'claro') {
-        ddElement.innerText = 'Picos de Instabilidade';
-        ddElement.className = 'stat-value warning-text';
-        telecoElement.innerText = '28% Market Share';
-    } else if (operadora === 'vivo') {
-        ddElement.innerText = 'Estável';
-        ddElement.className = 'stat-value success-text';
-        telecoElement.innerText = '35% Market Share';
-    } else if (operadora === 'tim') {
-        ddElement.innerText = 'Normal';
-        ddElement.className = 'stat-value success-text';
-        telecoElement.innerText = '22% Market Share';
-    } else {
-        ddElement.innerText = 'Geral Estável';
-        ddElement.className = 'stat-value success-text';
-        telecoElement.innerText = 'Dados Consolidados';
-    }
-}
