@@ -101,7 +101,8 @@ async function executarAnaliseEspacial() {
     const locationId = document.getElementById('search-input').dataset.currentId;
 
     try {
-        const response = await fetch('/api/coverage', {
+        const baseUrl = window.location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '';
+        const response = await fetch(`${baseUrl}/api/coverage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -123,7 +124,8 @@ async function executarAnaliseEspacial() {
             mapa.removeLayer(window.currentMvtLayer);
         }
         
-        const tileUrl = `/api/tiles/{z}/{x}/{y}.pbf?operadora=${operadoraSelecionada}&frequencia=${frequenciaSelecionada}`;
+        const baseUrl = window.location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '';
+        const tileUrl = `${baseUrl}/api/tiles/{z}/{x}/{y}.pbf?operadora=${operadoraSelecionada}&frequencia=${frequenciaSelecionada}`;
         window.currentMvtLayer = L.vectorGrid.protobuf(tileUrl, {
             vectorTileLayerStyles: {
                 'cobertura': function(properties, zoom) {
