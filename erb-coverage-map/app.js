@@ -156,9 +156,8 @@ async function executarAnaliseEspacial() {
                             return {
                                 fillColor: '#ff3b30',
                                 fillOpacity: 0.35,
-                                color: '#ffffff',
-                                weight: 1,
-                                dashArray: '3, 3'
+                                color: '#ff3b30',
+                                weight: 0
                             };
                         }
                     } else {
@@ -173,7 +172,8 @@ async function executarAnaliseEspacial() {
                         }
                     }
                     
-                    return { weight: 0, fillOpacity: 0 };
+                    // Hexágonos sem relevância (cobertos e sem highlight de popup/veg)
+                    return { weight: 0, fillOpacity: 0, color: 'transparent' };
                 }
             },
             interactive: false // Não precisa clicar nas células H3 por enquanto
