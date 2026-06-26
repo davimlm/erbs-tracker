@@ -121,7 +121,7 @@ async def analyze_coverage(req: CoverageRequest):
     
     query_stats = """
         WITH bounding_box AS (
-            SELECT ST_MakeEnvelope($4 - $5, $3 - $5, $4 + $5, $3 + $5, 4326) AS bbox
+            SELECT ST_MakeEnvelope($4::float - $5::float, $3::float - $5::float, $4::float + $5::float, $3::float + $5::float, 4326) AS bbox
         ),
         grid_filtrado AS (
             SELECT populacao_estimada, geometry as geom, ST_Area(geometry::geography) as area_geog
