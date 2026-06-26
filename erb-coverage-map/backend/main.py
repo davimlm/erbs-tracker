@@ -116,7 +116,7 @@ async def analyze_coverage(req: CoverageRequest):
         FROM erbs_ativas
         WHERE ($1 = 'all' OR operadora = $1) 
           AND ($2 = 'all' OR frequencia = $2)
-          AND ($3::float IS NULL OR ST_DWithin(geometry, ST_MakePoint($4, $3), $5))
+          AND ($3::float IS NULL OR ST_DWithin(geometry, ST_SetSRID(ST_MakePoint($4, $3), 4326), $5))
     """
     
     query_stats = """
