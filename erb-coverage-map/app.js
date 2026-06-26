@@ -140,15 +140,20 @@ async function executarAnaliseEspacial() {
         }
         
         // Renderizar Sombra Vegetativa (Área Verde)
-        if (mostrarVegetacao && data.poligonoVegetativo) {
-            L.geoJSON(data.poligonoVegetativo, {
-                style: {
-                    color: '#30d158',
-                    weight: 0,
-                    fillColor: '#30d158',
-                    fillOpacity: 0.35
-                }
-            }).addTo(camadaEstudoGroup);
+        if (mostrarVegetacao) {
+            if (data.aviso_area_verde) {
+                alert(data.aviso_area_verde);
+                if (vegToggleEl) vegToggleEl.checked = false;
+            } else if (data.poligonoVegetativo) {
+                L.geoJSON(data.poligonoVegetativo, {
+                    style: {
+                        color: '#30d158',
+                        weight: 0,
+                        fillColor: '#30d158',
+                        fillOpacity: 0.35
+                    }
+                }).addTo(camadaEstudoGroup);
+            }
         }
 
         // Renderizar ERBs

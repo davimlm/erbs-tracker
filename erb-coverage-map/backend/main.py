@@ -187,6 +187,7 @@ async def analyze_coverage(req: CoverageRequest):
     poligonoSombra_json = None
     poligonoVegetativo_json = None
     uniaoCobertura = None
+    aviso_area_verde = None
     
     if erbs_ativas:
         gdf_pts = gpd.GeoDataFrame(
@@ -261,10 +262,8 @@ async def analyze_coverage(req: CoverageRequest):
                                 poligonoVegetativo_json = mapping(vegetativo_final)
                                 
                 else:
-                    # Para estados e regiões não temos malha H3 populacional granular,
-                    # portanto assumimos a área inteira sem cobertura (sombra) como verde (vegetativa)
-                    poligonoVegetativo_json = mapping(sombra)
-                    areaSombraVegetativaKm2 = areaSombraKm2
+                    poligonoVegetativo_json = None
+                    aviso_area_verde = "Sem dados populacionais granulares para calcular a área verde nesta localidade."
                         
             except Exception as e:
                 logging.error(f"Erro na difereca: {e}")
@@ -315,7 +314,8 @@ async def analyze_coverage(req: CoverageRequest):
         "areaSombraKm2": areaSombraKm2,
         "areaSombraPercent": areaSombraPercent,
         "areaSombraHabitadaKm2": areaSombraHabitadaKm2,
-        "areaSombraVegetativaKm2": areaSombraVegetativaKm2
+        "areaSombraVegetativaKm2": areaSombraVegetativaKm2,
+        "aviso_area_verde": aviso_area_verde
     }
 
 # Servir static files no final
