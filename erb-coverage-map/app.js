@@ -105,6 +105,33 @@ async function executarAnaliseEspacial() {
 
     const locationId = document.getElementById('search-input').dataset.currentId;
 
+    let configLocal;
+    if (viewMode === 'cidades') configLocal = CONFIG_CIDADES_GERADO[locationId];
+    else if (viewMode === 'estados') configLocal = CONFIG_ESTADOS_GERADO[locationId];
+    else if (viewMode === 'regioes') configLocal = CONFIG_REGIOES_GERADO[locationId];
+
+    if (configLocal && configLocal.ibge_code) {
+        const nivel = viewMode === 'cidades' ? 'municipios' : (viewMode === 'estados' ? 'estados' : 'regioes');
+        const ibgeUrl = `https://servicodados.ibge.gov.br/api/v3/malhas/${nivel}/${configLocal.ibge_code}?formato=application/vnd.geo+json`;
+        try {
+            const malhaResp = await fetch(ibgeUrl);
+            if (malhaResp.ok) {
+                const malhaGeojson = await malhaResp.json();
+                L.geoJSON(malhaGeojson, {
+                    style: {
+                        color: '#ffffff',
+                        weight: 2,
+                        dashArray: '5, 5',
+                        fillOpacity: 0
+                    },
+                    interactive: false
+                }).addTo(camadaEstudoGroup);
+            }
+        } catch (err) {
+            console.error("Erro ao buscar malha do IBGE:", err);
+        }
+    }
+
     try {
         const baseUrl = window.location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '';
         const response = await fetch(`${baseUrl}/api/coverage`, {
