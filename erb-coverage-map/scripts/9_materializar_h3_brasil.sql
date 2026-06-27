@@ -1,68 +1,118 @@
--- SCRIPT 9: MATERIALIZAR H3 BRASIL
--- Este script realiza o cruzamento pesado das geometrias brutas do IBGE para gerar a malha H3 final.
+-- ==============================================================================
+-- MOTOR H3 POSTGIS: MATERIALIZAÇÃO DA MALHA DO BRASIL
+-- Objetivo: Cruzar os Setores Censitários (IBGE) com Uso da Terra (IBGE) 
+-- usando Hexágonos H3.
+-- ==============================================================================
+
+-- PARÂMETROS A SEREM SUBSTITUÍDOS APÓS A INSPEÇÃO DA TABELA BRUTA:
+-- <coluna_populacao> : Ex: v0001, pop_total, num_habitantes
+-- <coluna_vegetacao> : Ex: classe_uso, nm_veg, tipo_cobertura
+-- <codigo_setor>     : Ex: cd_setor, cd_geo_codigo
 
 BEGIN;
 
--- 1. Limpar a tabela final (caso estejamos reprocessando)
--- TRUNCATE TABLE h3_grid_precalc;
+-- 1. Habilitamos o H3 e o PostGIS
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS h3_postgis CASCADE;
 
--- 2. Materialização Temporária: Censo H3
--- Aqui transformamos os polígonos de setores censitários do IBGE em células H3 (Resolução 9)
--- IMPORTANTE: Verifique o nome da coluna de população na sua base bruta do IBGE (aqui usamos 'v0001' como placeholder padrão de Censo)
-CREATE TEMP TABLE temp_censo_h3 AS
-WITH censo_cells AS (
+-- 2. Limpamos a tabela final caso estejamos reprocessando
+DROP TABLE IF EXISTS h3_grid_precalc;
+
+-- 3. Criamos a estrutura final de alta performance
+CREATE TABLE h3_grid_precalc (
+    h3_index h3index PRIMARY KEY,
+    geom geometry(Polygon, 4326),
+    populacao_estimada double precision,
+    tipo_vegetacao_predominante varchar(255)
+);
+
+-- 4. O Pipeline de Processamento (A Mágica)
+-- Usamos CTEs (WITH) para não explodir a memória. 
+-- O PostgreSQL vai processar isso como um stream otimizado.
+WITH 
+
+-- A) Padronização de Projeção Geográfica
+setores_wgs84 AS (
     SELECT 
-        h3_polygon_to_cells(ST_Transform(geom, 4326), 9) AS h3_index,
-        COALESCE(v0001, 0) AS populacao_setor,
-        ST_Area(geom) AS area_setor
+        <codigo_setor> AS id_setor,
+        COALESCE(<coluna_populacao>, 0) AS populacao,
+        ST_Transform(geom, 4326) AS geom_4326,
+        ST_Area(ST_Transform(geom, 4326)::geography) AS area_total_setor
     FROM ibge_setores_raw
-    WHERE geom IS NOT NULL AND ST_IsValid(geom)
-)
-SELECT 
-    h3_index,
-    -- Uma simplificação: a população da célula H3 assume a densidade do setor. 
-    -- Numa versão hiper-precisa, faríamos a proporção (ST_Area(ST_Intersection) / area_setor)
-    SUM(populacao_setor * (ST_Area(h3_cell_to_boundary(h3_index)::geometry) / NULLIF(area_setor, 0))) AS populacao_estimada
-FROM censo_cells
-GROUP BY h3_index;
+    WHERE geom IS NOT NULL
+),
 
-CREATE INDEX idx_temp_censo_h3 ON temp_censo_h3 (h3_index);
-
--- 3. Materialização Temporária: Vegetação H3
--- Transformamos os polígonos de uso da terra em H3 (Resolução 9)
--- IMPORTANTE: Substituir 'nat_veg' pelo nome da coluna/filtro real que indica área verde na base do IBGE
-CREATE TEMP TABLE temp_veg_h3 AS
-WITH veg_cells AS (
+vegetacao_wgs84 AS (
     SELECT 
-        h3_polygon_to_cells(ST_Transform(geom, 4326), 9) AS h3_index
+        <coluna_vegetacao> AS tipo_veg,
+        ST_Transform(geom, 4326) AS geom_4326
     FROM ibge_vegetacao_raw
-    WHERE geom IS NOT NULL AND ST_IsValid(geom)
-      AND tipo_uso IN ('Floresta', 'Mata Nativa', 'Vegetação') -- Substituir pelos domínios corretos do IBGE!
+    WHERE geom IS NOT NULL
+),
+
+-- B) Geração da Malha H3 usando a Sombra do Setor
+-- A resolução 9 (aprox 0.1km²) é ideal para cidades
+h3_setores AS (
+    SELECT 
+        id_setor,
+        populacao,
+        area_total_setor,
+        -- Retorna os IDs dos hexágonos que cobrem a geometria
+        h3_polygon_to_cells(geom_4326, 9) AS h3_index,
+        geom_4326 AS geom_setor
+    FROM setores_wgs84
+),
+
+-- C) Fracionamento Populacional de Alta Precisão
+h3_populacao_fracionada AS (
+    SELECT 
+        h3_index,
+        h3_cell_to_boundary(h3_index)::geometry(Polygon, 4326) AS geom_hex,
+        SUM(
+            populacao * (
+                ST_Area(ST_Intersection(geom_setor, h3_cell_to_boundary(h3_index)::geometry(Polygon, 4326))::geography) 
+                / NULLIF(area_total_setor, 0)
+            )
+        ) AS pop_no_hexagono
+    FROM h3_setores
+    GROUP BY h3_index
+),
+
+-- D) Cruzamento Espacial com Uso da Terra (Vegetação)
+h3_vegetacao_join AS (
+    SELECT 
+        p.h3_index,
+        p.geom_hex,
+        p.pop_no_hexagono,
+        v.tipo_veg,
+        -- Calculamos o tamanho da interseção para ver qual vegetação domina o hexágono
+        ST_Area(ST_Intersection(p.geom_hex, v.geom_4326)::geography) AS area_intersecao
+    FROM h3_populacao_fracionada p
+    LEFT JOIN vegetacao_wgs84 v 
+        ON ST_Intersects(p.geom_hex, v.geom_4326)
+),
+
+-- E) Selecionar a vegetação dominante por hexágono (Window Function)
+h3_vegetacao_dominante AS (
+    SELECT DISTINCT ON (h3_index)
+        h3_index,
+        geom_hex,
+        pop_no_hexagono,
+        tipo_veg
+    FROM h3_vegetacao_join
+    ORDER BY h3_index, area_intersecao DESC
 )
+
+-- 5. Inserção Materializada Final
+INSERT INTO h3_grid_precalc (h3_index, geom, populacao_estimada, tipo_vegetacao_predominante)
 SELECT 
     h3_index,
-    100 AS percent_vegetacao -- Células geradas pelos polígonos de vegetação assumem 100% de cobertura
-FROM veg_cells
-GROUP BY h3_index;
+    geom_hex,
+    pop_no_hexagono,
+    tipo_veg
+FROM h3_vegetacao_dominante;
 
-CREATE INDEX idx_temp_veg_h3 ON temp_veg_h3 (h3_index);
-
--- 4. Fusão (Merge) Final na tabela h3_grid_precalc
-INSERT INTO h3_grid_precalc (h3_index, populacao_estimada, percent_vegetacao, geometry)
-SELECT 
-    COALESCE(c.h3_index, v.h3_index) AS h3_index,
-    COALESCE(c.populacao_estimada, 0) AS populacao_estimada,
-    COALESCE(v.percent_vegetacao, 0) AS percent_vegetacao,
-    h3_cell_to_boundary(COALESCE(c.h3_index, v.h3_index))::geometry AS geometry
-FROM temp_censo_h3 c
-FULL OUTER JOIN temp_veg_h3 v ON c.h3_index = v.h3_index
-ON CONFLICT (h3_index) DO UPDATE SET
-    populacao_estimada = EXCLUDED.populacao_estimada,
-    percent_vegetacao = EXCLUDED.percent_vegetacao,
-    geometry = EXCLUDED.geometry;
-
--- 5. Limpeza das Tabelas Brutas para salvar espaço (Opcional, pode ser comentado para debug)
--- DROP TABLE ibge_setores_raw;
--- DROP TABLE ibge_vegetacao_raw;
+-- 6. Criação do Índice Espacial para o MVT da nossa API
+CREATE INDEX idx_h3_grid_precalc_geom ON h3_grid_precalc USING GIST (geom);
 
 COMMIT;
