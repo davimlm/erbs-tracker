@@ -44,6 +44,12 @@ CONFIG_PROPAGACAO = {
 
 from typing import Optional
 
+class BBox(BaseModel):
+    minLat: float
+    minLng: float
+    maxLat: float
+    maxLng: float
+
 class CoverageRequest(BaseModel):
     locationId: str
     viewMode: str
@@ -53,6 +59,7 @@ class CoverageRequest(BaseModel):
     mostrarVegetacao: bool = False
     lat: Optional[float] = None
     lng: Optional[float] = None
+    bbox: Optional[BBox] = None
 
 @app.get("/api/tiles/{z}/{x}/{y}.pbf")
 async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequencia: str = 'all'):
@@ -116,17 +123,24 @@ async def analyze_coverage(req: CoverageRequest):
         FROM erbs_ativas
         WHERE ($1 = 'all' OR operadora = $1) 
           AND ($2 = 'all' OR frequencia = $2)
-          AND ($3::float IS NULL OR ST_DWithin(geometry, ST_SetSRID(ST_MakePoint($4, $3), 4326), $5))
+          AND (
+              ($7::float IS NOT NULL AND ST_Intersects(geometry, ST_MakeEnvelope($8::float, $7::float, $10::float, $9::float, 4326)))
+              OR ($7::float IS NULL AND $3::float IS NOT NULL AND ST_DWithin(geometry, ST_SetSRID(ST_MakePoint($4, $3), 4326), $5))
+          )
     """
     
     query_stats = """
         WITH bounding_box AS (
-            SELECT ST_MakeEnvelope($4::float - $5::float, $3::float - $5::float, $4::float + $5::float, $3::float + $5::float, 4326) AS bbox
+            SELECT 
+                CASE 
+                    WHEN $7::float IS NOT NULL THEN ST_MakeEnvelope($8::float, $7::float, $10::float, $9::float, 4326)
+                    ELSE ST_MakeEnvelope($4::float - $5::float, $3::float - $5::float, $4::float + $5::float, $3::float + $5::float, 4326)
+                END AS bbox
         ),
         grid_filtrado AS (
             SELECT populacao_estimada, geometry as geom, ST_Area(geometry::geography) as area_geog
             FROM h3_grid_precalc
-            WHERE ($3::float IS NULL OR ST_Intersects(geometry, (SELECT bbox FROM bounding_box)))
+            WHERE ($3::float IS NULL AND $7::float IS NULL) OR ST_Intersects(geometry, (SELECT bbox FROM bounding_box))
         )
         SELECT 
             COALESCE(SUM(populacao_estimada), 0) as pop_total,
@@ -151,9 +165,15 @@ async def analyze_coverage(req: CoverageRequest):
         FROM grid_filtrado g;
     """
     
+    bbox = req.bbox
+    minLat = bbox.minLat if bbox else None
+    minLng = bbox.minLng if bbox else None
+    maxLat = bbox.maxLat if bbox else None
+    maxLng = bbox.maxLng if bbox else None
+
     async with db_pool.acquire() as conn:
-        erbs_records = await conn.fetch(query_erbs, req.operadora, req.frequencia, req.lat, req.lng, r_deg)
-        stats = await conn.fetchrow(query_stats, raio_metros, req.operadora, req.lat, req.lng, r_deg, req.frequencia)
+        erbs_records = await conn.fetch(query_erbs, req.operadora, req.frequencia, req.lat, req.lng, r_deg, minLat, minLng, maxLat, maxLng)
+        stats = await conn.fetchrow(query_stats, raio_metros, req.operadora, req.lat, req.lng, r_deg, req.frequencia, minLat, minLng, maxLat, maxLng)
         
     erbs_ativas = [{"id": r["id"], "lat": r["lat"], "lng": r["lng"], "operadora": r["operadora"], "frequencia": r["frequencia"]} for r in erbs_records]
     

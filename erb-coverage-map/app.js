@@ -110,6 +110,7 @@ async function executarAnaliseEspacial() {
     else if (viewMode === 'estados') configLocal = CONFIG_ESTADOS_GERADO[locationId];
     else if (viewMode === 'regioes') configLocal = CONFIG_REGIOES_GERADO[locationId];
 
+    let bbox = null;
     if (configLocal && configLocal.ibge_code) {
         const nivel = viewMode === 'cidades' ? 'municipios' : (viewMode === 'estados' ? 'estados' : 'regioes');
         const ibgeUrl = `https://servicodados.ibge.gov.br/api/v3/malhas/${nivel}/${configLocal.ibge_code}?formato=application/vnd.geo+json`;
@@ -117,7 +118,7 @@ async function executarAnaliseEspacial() {
             const malhaResp = await fetch(ibgeUrl);
             if (malhaResp.ok) {
                 const malhaGeojson = await malhaResp.json();
-                L.geoJSON(malhaGeojson, {
+                const ibgeLayer = L.geoJSON(malhaGeojson, {
                     style: {
                         color: '#ffffff',
                         weight: 2,
@@ -126,6 +127,16 @@ async function executarAnaliseEspacial() {
                     },
                     interactive: false
                 }).addTo(camadaEstudoGroup);
+                
+                const bounds = ibgeLayer.getBounds();
+                mapa.flyToBounds(bounds, { duration: 1.5 });
+                
+                bbox = {
+                    minLat: bounds.getSouth(),
+                    minLng: bounds.getWest(),
+                    maxLat: bounds.getNorth(),
+                    maxLng: bounds.getEast()
+                };
             }
         } catch (err) {
             console.error("Erro ao buscar malha do IBGE:", err);
@@ -145,7 +156,8 @@ async function executarAnaliseEspacial() {
                 mostrarPopulacao: mostrarPopulacao,
                 mostrarVegetacao: mostrarVegetacao,
                 lat: configLocal ? configLocal.lat : null,
-                lng: configLocal ? configLocal.lng : null
+                lng: configLocal ? configLocal.lng : null,
+                bbox: bbox
             })
         });
 
@@ -208,16 +220,7 @@ async function executarAnaliseEspacial() {
             interactive: false // Não precisa clicar nas células H3 por enquanto
         }).addTo(mapa);
         
-        // Focar no mapa se for a primeira vez
-        if (data.erbsAtivas.length > 0 && viewMode === 'cidades') {
-            const lats = data.erbsAtivas.map(e => e.lat);
-            const lngs = data.erbsAtivas.map(e => e.lng);
-            const bounds = [
-                [Math.min(...lats) - 0.05, Math.min(...lngs) - 0.05],
-                [Math.max(...lats) + 0.05, Math.max(...lngs) + 0.05]
-            ];
-            mapa.fitBounds(bounds);
-        }
+        // O zoom agora é controlado pelo flyToBounds do polígono IBGE
 
         // Renderizar ERBs
         const configFrequencia = CONFIG_PROPAGACAO[frequenciaSelecionada] || {raioMetros: 1200};
