@@ -67,7 +67,7 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
     raio_metros = CONFIG_PROPAGACAO.get(frequencia, 1200)
     
     # Se houver um locationId válido, vamos cruzar a malha H3 apenas com a fronteira desse local
-    intersect_clause = "bounds.geom"
+    intersect_clause = "bounds.geom_4326"
     if locationId and locationId != 'none':
         intersect_clause = f"(SELECT geom FROM ibge_boundaries WHERE id = '{locationId}')"
 
