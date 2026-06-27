@@ -86,9 +86,9 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
             c.geom_4326,
             NOT EXISTS (
                 SELECT 1 FROM erbs_ativas e
-                WHERE ($2 = 'all' OR e.operadora = $2) 
-                  AND ($3 = 'all' OR e.frequencia = $3)
-                  AND ST_DWithin(c.geom_4326, e.geometry, $1 / 111320.0)
+                WHERE ('{operadora}' = 'all' OR e.operadora = '{operadora}') 
+                  AND ('{frequencia}' = 'all' OR e.frequencia = '{frequencia}')
+                  AND ST_DWithin(c.geom_4326, e.geometry, {raio_metros} / 111320.0)
             ) as na_sombra
         FROM celulas_sombra c
     ),
@@ -104,7 +104,7 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
     """
     
     async with db_pool.acquire() as conn:
-        tile = await conn.fetchval(query, raio_metros, operadora, frequencia)
+        tile = await conn.fetchval(query)
         
     if not tile:
         return Response(content=b"", media_type="application/x-protobuf")
