@@ -124,8 +124,8 @@ async def analyze_coverage(req: CoverageRequest):
         WHERE ($1 = 'all' OR operadora = $1) 
           AND ($2 = 'all' OR frequencia = $2)
           AND (
-              ($7::float IS NOT NULL AND ST_Intersects(geometry, ST_MakeEnvelope($8::float, $7::float, $10::float, $9::float, 4326)))
-              OR ($7::float IS NULL AND $3::float IS NOT NULL AND ST_DWithin(geometry, ST_SetSRID(ST_MakePoint($4, $3), 4326), $5))
+              ($6::float IS NOT NULL AND ST_Intersects(geometry, ST_MakeEnvelope($7::float, $6::float, $9::float, $8::float, 4326)))
+              OR ($6::float IS NULL AND $3::float IS NOT NULL AND ST_DWithin(geometry, ST_SetSRID(ST_MakePoint($4, $3), 4326), $5))
           )
     """
     
