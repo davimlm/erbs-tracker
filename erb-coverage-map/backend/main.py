@@ -67,11 +67,11 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
     raio_metros = CONFIG_PROPAGACAO.get(frequencia, 1200)
     
     # Query otimizada para Vector Tiles via PostGIS usando EXISTS
-    query = """
+    query = f"""
     WITH 
     bounds AS (
-        SELECT ST_Transform(ST_TileEnvelope($1, $2, $3), 4326) AS geom,
-               ST_TileEnvelope($1, $2, $3) AS geom_3857
+        SELECT ST_Transform(ST_TileEnvelope({z}, {x}, {y}), 4326) AS geom,
+               ST_TileEnvelope({z}, {x}, {y}) AS geom_3857
     ),
     celulas_sombra AS (
         SELECT h.h3_index, h.populacao_estimada, h.percent_vegetacao, h.geometry AS geom_4326
@@ -86,9 +86,9 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
             c.geom_4326,
             NOT EXISTS (
                 SELECT 1 FROM erbs_ativas e
-                WHERE ($5 = 'all' OR e.operadora = $5) 
-                  AND ($6 = 'all' OR e.frequencia = $6)
-                  AND ST_DWithin(c.geom_4326, e.geometry, $4 / 111320.0)
+                WHERE ($2 = 'all' OR e.operadora = $2) 
+                  AND ($3 = 'all' OR e.frequencia = $3)
+                  AND ST_DWithin(c.geom_4326, e.geometry, $1 / 111320.0)
             ) as na_sombra
         FROM celulas_sombra c
     ),
@@ -104,7 +104,7 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
     """
     
     async with db_pool.acquire() as conn:
-        tile = await conn.fetchval(query, z, x, y, raio_metros, operadora, frequencia)
+        tile = await conn.fetchval(query, raio_metros, operadora, frequencia)
         
     if not tile:
         return Response(content=b"", media_type="application/x-protobuf")
