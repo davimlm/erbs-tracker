@@ -177,40 +177,48 @@ async function executarAnaliseEspacial() {
             vectorTileLayerStyles: {
                 'cobertura': function(properties, zoom) {
                     // Lógica de prioridade de renderização H3
+                    // Parsing seguro de propriedades do MVT (evita bugs de serialização)
+                    const naSombra = properties.na_sombra === true || properties.na_sombra === 'true' || properties.na_sombra === 't' || properties.na_sombra === 1;
+                    const popEstimada = Number(properties.populacao_estimada) || 0;
+                    const percVegetacao = Number(properties.percent_vegetacao) || 0;
                     
-                    if (mostrarVegetacao && properties.percent_vegetacao > 0) {
+                    if (mostrarVegetacao && percVegetacao > 0) {
                         return {
                             fillColor: '#30d158',
-                            fillOpacity: Math.max(0.2, properties.percent_vegetacao / 100),
+                            fillOpacity: Math.max(0.2, percVegetacao / 100),
                             color: '#30d158',
-                            weight: 0
+                            weight: 0,
+                            fill: true
                         };
                     }
                     
-                    if (properties.na_sombra) {
-                        if (mostrarPopulacao && properties.populacao_estimada > 0) {
+                    if (naSombra) {
+                        if (mostrarPopulacao && popEstimada > 0) {
                             return {
                                 fillColor: '#ff453a',
-                                fillOpacity: Math.min(1.0, properties.populacao_estimada / 500),
+                                fillOpacity: Math.min(1.0, popEstimada / 500),
                                 color: '#ff453a',
-                                weight: 0
+                                weight: 0,
+                                fill: true
                             };
                         } else if (!mostrarPopulacao) {
                             return {
                                 fillColor: '#ff3b30',
                                 fillOpacity: 0.35,
                                 color: '#ff3b30',
-                                weight: 0
+                                weight: 0,
+                                fill: true
                             };
                         }
                     } else {
                         // Área Coberta
-                        if (mostrarPopulacao && properties.populacao_estimada > 0) {
+                        if (mostrarPopulacao && popEstimada > 0) {
                             return {
                                 fillColor: '#86868b',
-                                fillOpacity: Math.min(0.8, properties.populacao_estimada / 500),
+                                fillOpacity: Math.min(0.8, popEstimada / 500),
                                 color: '#86868b',
-                                weight: 0
+                                weight: 0,
+                                fill: true
                             };
                         }
                     }
