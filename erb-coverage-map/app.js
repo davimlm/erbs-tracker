@@ -175,9 +175,19 @@ async function executarAnaliseEspacial() {
         const tileUrl = `${baseUrl}/api/tiles/{z}/{x}/{y}.pbf?operadora=${operadoraSelecionada}&frequencia=${frequenciaSelecionada}&locationId=${locationId}`;
         window.currentMvtLayer = L.vectorGrid.protobuf(tileUrl, {
             vectorTileLayerStyles: {
+                // 1. Camada de Sombra Geométrica Exata
+                'sombra_exata': function(properties, zoom) {
+                    return {
+                        fillColor: '#ff3b30',
+                        fillOpacity: 0.35,
+                        color: '#ff3b30',
+                        weight: 0,
+                        fill: true
+                    };
+                },
+                
+                // 2. Camada de Cobertura H3 (População e Vegetação)
                 'cobertura': function(properties, zoom) {
-                    // Lógica de prioridade de renderização H3
-                    // Parsing seguro de propriedades do MVT (evita bugs de serialização)
                     const naSombra = properties.na_sombra === true || properties.na_sombra === 'true' || properties.na_sombra === 't' || properties.na_sombra === 1;
                     const popEstimada = Number(properties.populacao_estimada) || 0;
                     const percVegetacao = Number(properties.percent_vegetacao) || 0;
@@ -192,8 +202,8 @@ async function executarAnaliseEspacial() {
                         };
                     }
                     
-                    if (naSombra) {
-                        if (mostrarPopulacao && popEstimada > 0) {
+                    if (mostrarPopulacao && popEstimada > 0) {
+                        if (naSombra) {
                             return {
                                 fillColor: '#ff453a',
                                 fillOpacity: Math.min(1.0, popEstimada / 500),
@@ -201,18 +211,7 @@ async function executarAnaliseEspacial() {
                                 weight: 0,
                                 fill: true
                             };
-                        } else if (!mostrarPopulacao) {
-                            return {
-                                fillColor: '#ff3b30',
-                                fillOpacity: 0.35,
-                                color: '#ff3b30',
-                                weight: 0,
-                                fill: true
-                            };
-                        }
-                    } else {
-                        // Área Coberta
-                        if (mostrarPopulacao && popEstimada > 0) {
+                        } else {
                             return {
                                 fillColor: '#86868b',
                                 fillOpacity: Math.min(0.8, popEstimada / 500),
@@ -223,9 +222,9 @@ async function executarAnaliseEspacial() {
                         }
                     }
                     
-                    // Hexágonos sem relevância (cobertos e sem highlight de popup/veg)
-                    return { weight: 0, fillOpacity: 0, color: 'transparent' };
+                    return { weight: 0, fillOpacity: 0, color: 'transparent', fill: false };
                 }
+            }
             },
             interactive: false // Não precisa clicar nas células H3 por enquanto
         }).addTo(mapa);

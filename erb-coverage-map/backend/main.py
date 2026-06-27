@@ -71,42 +71,64 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
     if locationId and locationId != 'none':
         intersect_clause = f"(SELECT geom FROM ibge_boundaries WHERE id = '{locationId}')"
 
-    # Query otimizada para Vector Tiles via PostGIS usando EXISTS
+    # Query otimizada para Vector Tiles via PostGIS gerando 2 layers
     query = f"""
     WITH 
     bounds AS (
-        SELECT ST_Transform(ST_TileEnvelope({z}, {x}, {y}), 4326) AS geom,
+        SELECT ST_Transform(ST_TileEnvelope({z}, {x}, {y}), 4326) AS geom_4326,
                ST_TileEnvelope({z}, {x}, {y}) AS geom_3857
     ),
-    celulas_sombra AS (
-        SELECT h.h3_index, h.populacao_estimada, h.percent_vegetacao, h.geometry AS geom_4326
-        FROM h3_grid_precalc h, bounds
-        WHERE ST_Intersects(h.geometry, bounds.geom)
-          AND ('{locationId}' = 'none' OR ST_Intersects(h.geometry, {intersect_clause}))
-    ),
-    celulas_classificadas AS (
+    tile_clip AS (
         SELECT 
-            c.h3_index,
+            CASE 
+                WHEN '{locationId}' != 'none' THEN 
+                    ST_Intersection(bounds.geom_4326, {intersect_clause})
+                ELSE bounds.geom_4326
+            END as geom_4326
+        FROM bounds
+    ),
+    -- 1. Sombra Geométrica Exata (Cobre a cidade inteira, mesmo onde não tem dado H3)
+    erbs_buffers AS (
+        SELECT ST_Union(ST_Buffer(e.geometry, {raio_metros} / 111320.0, 'quad_segs=4')) as geom
+        FROM erbs_ativas e, tile_clip
+        WHERE ('{operadora}' = 'all' OR e.operadora = '{operadora}') 
+          AND ('{frequencia}' = 'all' OR e.frequencia = '{frequencia}')
+          AND ST_DWithin(e.geometry, tile_clip.geom_4326, {raio_metros} / 111320.0)
+    ),
+    sombra_geom AS (
+        SELECT 
+            ST_Difference(tile_clip.geom_4326, COALESCE((SELECT geom FROM erbs_buffers), ST_GeomFromText('POLYGON EMPTY', 4326))) as geom_4326
+        FROM tile_clip
+        WHERE NOT ST_IsEmpty(tile_clip.geom_4326)
+    ),
+    mvt_sombra AS (
+        SELECT ST_AsMVTGeom(ST_Transform(s.geom_4326, 3857), (SELECT geom_3857 FROM bounds)) AS geom
+        FROM sombra_geom s
+        WHERE NOT ST_IsEmpty(s.geom_4326)
+    ),
+    -- 2. H3 Cobertura (Apenas dados de população e vegetação, para onde o H3 existe)
+    celulas_cobertura AS (
+        SELECT h.h3_index, h.populacao_estimada, h.percent_vegetacao, h.geometry AS geom_4326
+        FROM h3_grid_precalc h, tile_clip
+        WHERE ST_Intersects(h.geometry, tile_clip.geom_4326)
+    ),
+    mvt_cobertura AS (
+        SELECT 
+            ST_AsMVTGeom(ST_Transform(c.geom_4326, 3857), (SELECT geom_3857 FROM bounds)) AS geom,
             c.populacao_estimada,
             c.percent_vegetacao,
-            c.geom_4326,
             NOT EXISTS (
                 SELECT 1 FROM erbs_ativas e
                 WHERE ('{operadora}' = 'all' OR e.operadora = '{operadora}') 
                   AND ('{frequencia}' = 'all' OR e.frequencia = '{frequencia}')
                   AND ST_DWithin(c.geom_4326, e.geometry, {raio_metros} / 111320.0)
             ) as na_sombra
-        FROM celulas_sombra c
-    ),
-    mvtgeom AS (
-        SELECT 
-            ST_AsMVTGeom(ST_Transform(c.geom_4326, 3857), (SELECT geom_3857 FROM bounds)) AS geom,
-            c.populacao_estimada,
-            c.percent_vegetacao,
-            c.na_sombra
-        FROM celulas_classificadas c
+        FROM celulas_cobertura c
     )
-    SELECT ST_AsMVT(mvtgeom, 'cobertura') FROM mvtgeom;
+    SELECT (
+        COALESCE((SELECT ST_AsMVT(mvt_sombra, 'sombra_exata') FROM mvt_sombra), '\\x'::bytea) || 
+        COALESCE((SELECT ST_AsMVT(mvt_cobertura, 'cobertura') FROM mvt_cobertura), '\\x'::bytea)
+    ) AS mvt;
     """
     
     async with db_pool.acquire() as conn:
