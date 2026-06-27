@@ -111,13 +111,14 @@ async function executarAnaliseEspacial() {
     else if (viewMode === 'regioes') configLocal = CONFIG_REGIOES_GERADO[locationId];
 
     let bbox = null;
+    let malhaGeojson = null;
     if (configLocal && configLocal.ibge_code) {
         const nivel = viewMode === 'cidades' ? 'municipios' : (viewMode === 'estados' ? 'estados' : 'regioes');
         const ibgeUrl = `https://servicodados.ibge.gov.br/api/v3/malhas/${nivel}/${configLocal.ibge_code}?formato=application/vnd.geo+json`;
         try {
             const malhaResp = await fetch(ibgeUrl);
             if (malhaResp.ok) {
-                const malhaGeojson = await malhaResp.json();
+                malhaGeojson = await malhaResp.json();
                 const ibgeLayer = L.geoJSON(malhaGeojson, {
                     style: {
                         color: '#ffffff',
@@ -157,7 +158,8 @@ async function executarAnaliseEspacial() {
                 mostrarVegetacao: mostrarVegetacao,
                 lat: configLocal ? configLocal.lat : null,
                 lng: configLocal ? configLocal.lng : null,
-                bbox: bbox
+                bbox: bbox,
+                geojson: malhaGeojson
             })
         });
 
