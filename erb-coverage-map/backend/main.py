@@ -60,6 +60,7 @@ class CoverageRequest(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     bbox: Optional[BBox] = None
+    geojson: Optional[dict] = None
 
 @app.get("/api/tiles/{z}/{x}/{y}.pbf")
 async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequencia: str = 'all'):
@@ -124,8 +125,9 @@ async def analyze_coverage(req: CoverageRequest):
         WHERE ($1 = 'all' OR operadora = $1) 
           AND ($2 = 'all' OR frequencia = $2)
           AND (
-              ($6::float IS NOT NULL AND ST_Intersects(geometry, ST_MakeEnvelope($7::float, $6::float, $9::float, $8::float, 4326)))
-              OR ($6::float IS NULL AND $3::float IS NOT NULL AND ST_DWithin(geometry, ST_SetSRID(ST_MakePoint($4, $3), 4326), $5))
+              ($6::text IS NOT NULL AND ST_Intersects(geometry, ST_SetSRID(ST_GeomFromGeoJSON($6), 4326)))
+              OR ($6::text IS NULL AND $7::float IS NOT NULL AND ST_Intersects(geometry, ST_MakeEnvelope($8::float, $7::float, $10::float, $9::float, 4326)))
+              OR ($6::text IS NULL AND $7::float IS NULL AND $3::float IS NOT NULL AND ST_DWithin(geometry, ST_SetSRID(ST_MakePoint($4, $3), 4326), $5))
           )
     """
     
@@ -133,6 +135,7 @@ async def analyze_coverage(req: CoverageRequest):
         WITH bounding_box AS (
             SELECT 
                 CASE 
+                    WHEN $11::text IS NOT NULL THEN ST_SetSRID(ST_GeomFromGeoJSON($11), 4326)
                     WHEN $7::float IS NOT NULL THEN ST_MakeEnvelope($8::float, $7::float, $10::float, $9::float, 4326)
                     ELSE ST_MakeEnvelope($4::float - $5::float, $3::float - $5::float, $4::float + $5::float, $3::float + $5::float, 4326)
                 END AS bbox
@@ -140,7 +143,7 @@ async def analyze_coverage(req: CoverageRequest):
         grid_filtrado AS (
             SELECT populacao_estimada, geometry as geom, ST_Area(geometry::geography) as area_geog
             FROM h3_grid_precalc
-            WHERE ($3::float IS NULL AND $7::float IS NULL) OR ST_Intersects(geometry, (SELECT bbox FROM bounding_box))
+            WHERE ($3::float IS NULL AND $7::float IS NULL AND $11::text IS NULL) OR ST_Intersects(geometry, (SELECT bbox FROM bounding_box))
         )
         SELECT 
             COALESCE(SUM(populacao_estimada), 0) as pop_total,
@@ -170,10 +173,14 @@ async def analyze_coverage(req: CoverageRequest):
     minLng = bbox.minLng if bbox else None
     maxLat = bbox.maxLat if bbox else None
     maxLng = bbox.maxLng if bbox else None
+    
+    geom_json = None
+    if req.geojson and "features" in req.geojson and len(req.geojson["features"]) > 0:
+        geom_json = json.dumps(req.geojson["features"][0]["geometry"])
 
     async with db_pool.acquire() as conn:
-        erbs_records = await conn.fetch(query_erbs, req.operadora, req.frequencia, req.lat, req.lng, r_deg, minLat, minLng, maxLat, maxLng)
-        stats = await conn.fetchrow(query_stats, raio_metros, req.operadora, req.lat, req.lng, r_deg, req.frequencia, minLat, minLng, maxLat, maxLng)
+        erbs_records = await conn.fetch(query_erbs, req.operadora, req.frequencia, req.lat, req.lng, r_deg, geom_json, minLat, minLng, maxLat, maxLng)
+        stats = await conn.fetchrow(query_stats, raio_metros, req.operadora, req.lat, req.lng, r_deg, req.frequencia, minLat, minLng, maxLat, maxLng, geom_json)
         
     erbs_ativas = [{"id": r["id"], "lat": r["lat"], "lng": r["lng"], "operadora": r["operadora"], "frequencia": r["frequencia"]} for r in erbs_records]
     
