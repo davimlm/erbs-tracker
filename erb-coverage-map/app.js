@@ -224,7 +224,6 @@ async function executarAnaliseEspacial() {
                     
                     return { weight: 0, fillOpacity: 0, color: 'transparent', fill: false };
                 }
-            }
             },
             interactive: false // Não precisa clicar nas células H3 por enquanto
         }).addTo(mapa);
