@@ -63,9 +63,14 @@ class CoverageRequest(BaseModel):
     geojson: Optional[dict] = None
 
 @app.get("/api/tiles/{z}/{x}/{y}.pbf")
-async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequencia: str = 'all'):
+async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequencia: str = 'all', locationId: str = 'none'):
     raio_metros = CONFIG_PROPAGACAO.get(frequencia, 1200)
     
+    # Se houver um locationId válido, vamos cruzar a malha H3 apenas com a fronteira desse local
+    intersect_clause = "bounds.geom"
+    if locationId and locationId != 'none':
+        intersect_clause = f"(SELECT geom FROM ibge_boundaries WHERE id = '{locationId}')"
+
     # Query otimizada para Vector Tiles via PostGIS usando EXISTS
     query = f"""
     WITH 
@@ -77,6 +82,7 @@ async def get_mvt_tile(z: int, x: int, y: int, operadora: str = 'all', frequenci
         SELECT h.h3_index, h.populacao_estimada, h.percent_vegetacao, h.geometry AS geom_4326
         FROM h3_grid_precalc h, bounds
         WHERE ST_Intersects(h.geometry, bounds.geom)
+          AND ('{locationId}' = 'none' OR ST_Intersects(h.geometry, {intersect_clause}))
     ),
     celulas_classificadas AS (
         SELECT 
@@ -179,6 +185,14 @@ async def analyze_coverage(req: CoverageRequest):
         geom_json = json.dumps(req.geojson["features"][0]["geometry"])
 
     async with db_pool.acquire() as conn:
+        if geom_json:
+            # Salvar no banco para ser usado pela query do MVT (cache da fronteira do município)
+            await conn.execute("""
+                INSERT INTO ibge_boundaries (id, geom) 
+                VALUES ($1, ST_SetSRID(ST_GeomFromGeoJSON($2), 4326))
+                ON CONFLICT (id) DO UPDATE SET geom = EXCLUDED.geom
+            """, req.locationId, geom_json)
+            
         erbs_records = await conn.fetch(query_erbs, req.operadora, req.frequencia, req.lat, req.lng, r_deg, geom_json, minLat, minLng, maxLat, maxLng)
         stats = await conn.fetchrow(query_stats, raio_metros, req.operadora, req.lat, req.lng, r_deg, req.frequencia, minLat, minLng, maxLat, maxLng, geom_json)
         

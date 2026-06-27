@@ -172,7 +172,7 @@ async function executarAnaliseEspacial() {
             mapa.removeLayer(window.currentMvtLayer);
         }
         
-        const tileUrl = `${baseUrl}/api/tiles/{z}/{x}/{y}.pbf?operadora=${operadoraSelecionada}&frequencia=${frequenciaSelecionada}`;
+        const tileUrl = `${baseUrl}/api/tiles/{z}/{x}/{y}.pbf?operadora=${operadoraSelecionada}&frequencia=${frequenciaSelecionada}&locationId=${locationId}`;
         window.currentMvtLayer = L.vectorGrid.protobuf(tileUrl, {
             vectorTileLayerStyles: {
                 'cobertura': function(properties, zoom) {
