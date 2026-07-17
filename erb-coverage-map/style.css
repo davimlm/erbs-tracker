@@ -445,3 +445,186 @@ input:checked + .slider:before {
 .modal-body li { margin-bottom: 8px; line-height: 1.4; }
 .modal-body strong { color: var(--text-primary); }
 
+/* MOBILE RESPONSIVENESS */
+@media screen and (max-width: 768px) {
+    .control-panel {
+        top: 10px;
+        left: 10px;
+        width: calc(100% - 20px);
+        max-height: 45vh;
+        padding: 16px;
+        gap: 12px;
+    }
+    h1 {
+        font-size: 1.2rem;
+    }
+    .stat-card h3 {
+        font-size: 1rem;
+    }
+    #map-legends {
+        bottom: 10px;
+        right: 10px;
+        max-width: calc(100% - 20px);
+        font-size: 0.8rem;
+        padding: 10px;
+    }
+    .legend-title {
+        font-size: 0.8rem;
+    }
+    .legend-item {
+        margin-bottom: 4px;
+    }
+}
+
+
+/* ==========================================================================
+   Admin & Telemetry UI
+   ========================================================================== */
+.bottom-buttons {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 1000;
+}
+
+.admin-btn, .btn-metodologia {
+    background: rgba(10, 10, 10, 0.85);
+    color: var(--text-primary);
+    border: 1px solid var(--border-glass);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.admin-btn:hover, .btn-metodologia:hover {
+    background: rgba(30, 30, 30, 0.95);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.admin-btn.active {
+    background: rgba(10, 132, 255, 0.2);
+    border-color: #0a84ff;
+    color: #0a84ff;
+}
+
+.telemetry-hud {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 15px;
+    z-index: 1000;
+    width: 250px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #00ff00;
+    pointer-events: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+.telemetry-hud h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #fff;
+    border-bottom: 1px solid #333;
+    padding-bottom: 5px;
+}
+
+.hud-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.hud-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: #222;
+    margin: 0 10px;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.hud-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: #00ff00;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.hud-value {
+    width: 40px;
+    text-align: right;
+}
+.legends-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1000;
+    pointer-events: none; /* Permite clicar no mapa atrás do painel */
+}
+
+.legend-card {
+    background: rgba(18, 18, 20, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 10px 14px;
+    pointer-events: auto;
+    backdrop-filter: blur(8px);
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), max-height 0.3s ease;
+    max-height: 120px;
+    opacity: 1;
+    transform: translateY(0);
+    overflow: hidden;
+}
+
+/* Estado oculto acelerado por hardware */
+.legend-card.dynamic.hidden {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-width: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+}
+
+/* Fidedignidade Estrita das Barras */
+.gradient-bar {
+    height: 8px;
+    border-radius: 4px;
+    margin: 6px 0 4px 0;
+    width: 180px;
+}
+
+.turbo-gradient {
+    /* Exata reprodução visual da paleta Turbo do Matplotlib */
+    background: linear-gradient(90deg, #30123b, #28bceb, #a5fb38, #f86012, #7a0403);
+}
+
+.stepped-green {
+    /* Degraus exatos espelhando os limiares 0.03, 0.08, 0.12, 0.18 do PostGIS */
+    background: linear-gradient(90deg, 
+        #a5d6a7 0% 20%, 
+        #66bb6a 20% 45%, 
+        #388e3c 45% 75%, 
+        #004d00 75% 100%);
+}
+
+.pop-gradient {
+    background: linear-gradient(90deg, rgba(165,251,56,0.3) 0%, #ff8c00 50%, #8b0000 100%);
+}

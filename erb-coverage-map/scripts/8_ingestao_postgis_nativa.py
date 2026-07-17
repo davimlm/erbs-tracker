@@ -7,19 +7,14 @@ import glob
 # Configuração de Logs
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Cuidado 1: Caminho dos binários do PostgreSQL no Windows (pode precisar de ajuste manual)
-# Ex: C:\\Program Files\\PostgreSQL\\15\\bin\\
-PG_BIN = os.environ.get("PG_BIN", "") 
-SHP2PGSQL = os.path.join(PG_BIN, "shp2pgsql") if PG_BIN else "shp2pgsql"
-PSQL = os.path.join(PG_BIN, "psql") if PG_BIN else "psql"
+# Cuidado 1: Caminho dos binários do PostgreSQL no Windows
+PG_BIN = r"C:\Program Files\PostgreSQL\18\bin"
+SHP2PGSQL = os.path.join(PG_BIN, "shp2pgsql.exe")
+PSQL = os.path.join(PG_BIN, "psql.exe")
 
 DB_URI = "postgresql://postgres:UFABC@localhost:5432/cobertura_db"
 
-UFS = [
-    "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", 
-    "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", 
-    "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"
-]
+UFS = ["AC"]
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"

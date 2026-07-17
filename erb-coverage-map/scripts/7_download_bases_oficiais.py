@@ -7,12 +7,8 @@ from pathlib import Path
 # Configuração de Logs para acompanhamento
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Lista oficial de UFs do Brasil
-UFS = [
-    "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", 
-    "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", 
-    "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"
-]
+# Lista oficial de UFs do Brasil (Limitado ao Acre para teste)
+UFS = ["AC"]
 
 # Diretórios base
 BASE_DIR = Path(__file__).resolve().parent.parent

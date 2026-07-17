@@ -5,9 +5,8 @@
 -- ==============================================================================
 
 -- PARÂMETROS A SEREM SUBSTITUÍDOS APÓS A INSPEÇÃO DA TABELA BRUTA:
--- <coluna_populacao> : Ex: v0001, pop_total, num_habitantes
--- <coluna_vegetacao> : Ex: classe_uso, nm_veg, tipo_cobertura
--- <codigo_setor>     : Ex: cd_setor, cd_geo_codigo
+-- Nota: 'v0001' é a População Total no Censo 2022. 'cd_setor' é o Código do Setor.
+-- Nota: 'legenda' será usado como o tipo de vegetação.
 
 BEGIN;
 
@@ -34,8 +33,8 @@ WITH
 -- A) Padronização de Projeção Geográfica
 setores_wgs84 AS (
     SELECT 
-        <codigo_setor> AS id_setor,
-        COALESCE(<coluna_populacao>, 0) AS populacao,
+        cd_setor AS id_setor,
+        COALESCE(v0001, 0) AS populacao,
         ST_Transform(geom, 4326) AS geom_4326,
         ST_Area(ST_Transform(geom, 4326)::geography) AS area_total_setor
     FROM ibge_setores_raw
@@ -44,7 +43,7 @@ setores_wgs84 AS (
 
 vegetacao_wgs84 AS (
     SELECT 
-        <coluna_vegetacao> AS tipo_veg,
+        legenda AS tipo_veg,
         ST_Transform(geom, 4326) AS geom_4326
     FROM ibge_vegetacao_raw
     WHERE geom IS NOT NULL

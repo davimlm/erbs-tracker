@@ -8,7 +8,8 @@ CIDADES_IBGE = {
     'sao_paulo': 3550308,
     'rio_janeiro': 3304557,
     'belo_horizonte': 3106200,
-    'brasilia': 5300108
+    'brasilia': 5300108,
+    'sao_bernardo_do_campo_sp': 3548708
 }
 
 def processar_populacao_real():
@@ -51,7 +52,8 @@ def gerar_mock_centroides_ibge(cidade):
         'sao_paulo': (-23.5615, -46.6560),
         'rio_janeiro': (-22.9068, -43.1729),
         'belo_horizonte': (-19.9333, -43.9386),
-        'brasilia': (-15.7942, -47.8822)
+        'brasilia': (-15.7942, -47.8822),
+        'sao_bernardo_do_campo_sp': (-23.6938, -46.5656)
     }
     lat_base, lng_base = coords[cidade]
     pontos = []
